@@ -13,7 +13,7 @@ from reportlab.pdfgen import canvas
 
 # -------------------- CONFIGURAZIONE --------------------
 st.set_page_config(
-    page_title="Assistente Segreteria Scuola",
+    page_title="AVS - Assistente Virtuale Scolastico",
     page_icon="🏫",
     layout="wide",
 )
@@ -325,7 +325,7 @@ def formatta_e_mostra(testo, indice_msg):
 
 
 # -------------------- INTERFACCIA STREAMLIT --------------------
-st.title("🏫 Assistente Virtuale Segreteria Scolastica")
+st.title("🏫 AVS - Assistente Virtuale Scolastico")
 st.caption(
     "Guida operativa per il personale amministrativo | "
     "Fonti di riferimento: MIM, Normattiva, Gazzetta Ufficiale e ARAN"
