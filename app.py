@@ -246,4 +246,4 @@ if domanda:
 
     with st.chat_message("assistant"):
         with st.spinner("Consulto le normative ufficiali 2026 e Orizzonte Scuola..."):
-            try:
+     
