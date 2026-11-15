@@ -2,6 +2,7 @@ import io
 import re
 import textwrap
 import unicodedata
+from urllib.parse import quote_plus
 
 import streamlit as st
 from google import genai
@@ -311,109 +312,280 @@ st.caption(
     "Fonti di riferimento: MIM, Normattiva, Gazzetta Ufficiale e ARAN"
 )
 
+if "messaggi" not in st.session_state:
+    st.session_state["messaggi"] = []
+if "modulo_testo_editabile" not in st.session_state:
+    st.session_state["modulo_testo_editabile"] = ""
+if "modulo_guidato_pronto" not in st.session_state:
+    st.session_state["modulo_guidato_pronto"] = False
+
 with st.sidebar:
-    st.header("⚡ Azioni rapide")
-    st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
-
-    if st.button("📋 Presa di servizio supplente", use_container_width=True):
-        st.session_state["prompt_rapido"] = (
-            "Un docente supplente deve prendere servizio oggi ma ha la febbre "
-            "e non può venire fisicamente a firmare. Come devo procedere? "
-            "Prepara anche una bozza di modulo editabile per la presa di servizio."
-        )
-
-    if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
-        st.session_state["prompt_rapido"] = (
-            "Un docente mi ha comunicato stamattina di essere in malattia. "
-            "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
-            "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola."
-        )
-
-    if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
-        st.session_state["prompt_rapido"] = (
-            "Devo inviare una convocazione urgente per supplenza breve tramite "
-            "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
-            "editabile. Indica quali dati devo verificare prima dell'invio."
-        )
+    st.header("🧰 Strumenti AVS")
+    strumento = st.radio(
+        "Che cosa vuoi fare?",
+        ["Assistente segreteria", "Crea modulo PDF compilabile"],
+        key="strumento_avs",
+    )
 
     st.divider()
 
-    if st.button("🗑️ Nuova conversazione", use_container_width=True):
-        st.session_state["messaggi"] = []
-        st.rerun()
+    if strumento == "Assistente segreteria":
+        st.header("⚡ Azioni rapide")
+        st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
-if "messaggi" not in st.session_state:
-    st.session_state["messaggi"] = []
+        if st.button("📋 Presa di servizio supplente", use_container_width=True):
+            st.session_state["prompt_rapido"] = (
+                "Un docente supplente deve prendere servizio oggi ma ha la febbre "
+                "e non può venire fisicamente a firmare. Come devo procedere? "
+                "Prepara anche una bozza di modulo editabile per la presa di servizio."
+            )
 
-# Mostra la cronologia della sessione.
-for idx, messaggio in enumerate(st.session_state["messaggi"]):
-    with st.chat_message(messaggio["role"]):
-        if messaggio["role"] == "assistant":
-            formatta_e_mostra(messaggio["content"], idx)
+        if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
+            st.session_state["prompt_rapido"] = (
+                "Un docente mi ha comunicato stamattina di essere in malattia. "
+                "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
+                "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola."
+            )
+
+        if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
+            st.session_state["prompt_rapido"] = (
+                "Devo inviare una convocazione urgente per supplenza breve tramite "
+                "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
+                "editabile. Indica quali dati devo verificare prima dell'invio."
+            )
+
+        st.divider()
+        if st.button("🗑️ Nuova conversazione", use_container_width=True):
+            st.session_state["messaggi"] = []
+            st.rerun()
+    else:
+        st.markdown(
+            "Descrivi il modulo che ti serve, controlla la bozza e scarica "
+            "un PDF con campi compilabili."
+        )
+        if st.button("🗑️ Svuota bozza modulo", use_container_width=True):
+            st.session_state["modulo_testo_editabile"] = ""
+            st.session_state["modulo_guidato_pronto"] = False
+            st.rerun()
+
+
+if strumento == "Crea modulo PDF compilabile":
+    st.subheader("📄 Crea un modulo PDF compilabile")
+    st.write(
+        "Descrivi il documento che ti serve. AVS preparerà una bozza da controllare; "
+        "potrai correggerla prima di scaricare il PDF."
+    )
+
+    categorie_modulo = [
+        "Richiesta o istanza alla scuola",
+        "Autorizzazione o consenso",
+        "Delega",
+        "Autodichiarazione",
+        "Presa di servizio o documentazione del personale",
+        "Verbale o scheda di rilevazione",
+        "Altro modulo",
+    ]
+
+    with st.form("form_modulo_guidato"):
+        categoria = st.selectbox("Tipo di modulo", categorie_modulo)
+        destinatario = st.text_input(
+            "A chi è destinato?",
+            placeholder="Es. famiglie, docenti, personale ATA, dirigente scolastico",
+        )
+        scopo = st.text_area(
+            "Che cosa deve permettere di fare il modulo?",
+            placeholder="Descrivi la richiesta o la procedura. Non inserire dati personali reali.",
+            height=100,
+        )
+        campi_richiesti = st.text_area(
+            "Quali campi vuoi inserire? (facoltativo)",
+            placeholder="Es. nome e cognome, classe, data, motivazione, firma",
+            height=80,
+        )
+        riferimenti = st.text_area(
+            "Indicazioni o testo da rispettare (facoltativo)",
+            placeholder="Incolla eventuali istruzioni della scuola o riferimenti già verificati.",
+            height=80,
+        )
+        genera_bozza = st.form_submit_button(
+            "✨ Prepara la bozza con AVS", use_container_width=True
+        )
+
+    query_ricerca = "modulo scolastico " + categoria
+    if destinatario.strip():
+        query_ricerca += " " + destinatario.strip()
+    if scopo.strip():
+        query_ricerca += " " + scopo.strip()
+    url_ricerca = "https://www.google.com/search?q=" + quote_plus(
+        query_ricerca + " sito scuola istituto MIM"
+    )
+    st.link_button(
+        "🔎 Cerca modelli pubblicati online",
+        url_ricerca,
+        help="Apre una ricerca web in una nuova scheda. AVS non scarica né verifica automaticamente i risultati.",
+        use_container_width=True,
+    )
+    st.caption(
+        "I risultati online sono riferimenti da controllare: un modello di un'altra scuola "
+        "non è automaticamente ufficiale o adatto al tuo istituto."
+    )
+
+    if genera_bozza:
+        if not scopo.strip():
+            st.warning("Descrivi brevemente lo scopo del modulo prima di generare la bozza.")
         else:
-            st.markdown(messaggio["content"])
-
-domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
-
-if "prompt_rapido" in st.session_state:
-    domanda = st.session_state.pop("prompt_rapido")
-
-if domanda:
-    st.session_state["messaggi"].append({"role": "user", "content": domanda})
-
-    with st.chat_message("user"):
-        st.markdown(domanda)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Sto preparando la risposta..."):
-            try:
-                api_key = st.secrets.get("GEMINI_API_KEY")
-                if not api_key:
-                    raise ValueError(
-                        "Chiave API mancante. Configura GEMINI_API_KEY nel file "
-                        ".streamlit/secrets.toml."
-                    )
-
-                client = get_gemini_client(api_key)
-
-                # Gemini usa "user" e "model" come ruoli nella cronologia.
-                contenuti = []
-                # Invia solo gli ultimi 4 messaggi (2 scambi): riduce la latenza.
-                for messaggio in st.session_state["messaggi"][-4:]:
-                    ruolo = "model" if messaggio["role"] == "assistant" else "user"
-                    contenuti.append(
-                        {
-                            "role": ruolo,
-                            "parts": [{"text": messaggio["content"]}],
-                        }
-                    )
-
-                risposta = client.models.generate_content(
-                    model=MODEL_NAME,
-                    contents=contenuti,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.2,
-                        # Limita la lunghezza per ottenere risposte più rapide e concise.
-                        max_output_tokens=900,
-                    ),
-                )
-
-                testo_risposta = (risposta.text or "").strip()
-                if not testo_risposta:
-                    testo_risposta = (
-                        "Non è arrivato testo nella risposta del modello. "
-                        "Riprova con una domanda più specifica."
-                    )
-
-                formatta_e_mostra(testo_risposta, len(st.session_state["messaggi"]))
-                st.session_state["messaggi"].append(
-                    {"role": "assistant", "content": testo_risposta}
-                )
-
-            except Exception as exc:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+            if not api_key:
                 st.error(
-                    "Si è verificato un problema durante la richiesta a Gemini. "
-                    "Controlla la chiave API, la connessione e il nome del modello."
+                    "Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud."
                 )
-                st.code(str(exc))
+            else:
+                prompt_modulo = f"""
+Prepara una BOZZA di modulo amministrativo per una scuola italiana.
+Tipo di modulo: {categoria}
+Destinatario: {destinatario.strip() or "da specificare"}
+Scopo: {scopo.strip()}
+Campi richiesti: {campi_richiesti.strip() or "individua i campi strettamente necessari"}
+Indicazioni fornite dall'utente: {riferimenti.strip() or "nessuna"}
+
+Regole:
+- Rispondi in italiano con il testo del modulo, senza introduzioni e senza markdown decorativo.
+- Prima riga: titolo breve del modulo.
+- Struttura il testo in sezioni e paragrafi brevi, con spaziatura tramite righe vuote.
+- Per ogni campo compilabile usa un segnaposto tra parentesi quadre, con un'etichetta chiara, ad esempio [Nome e cognome], [Classe], [Data], [Firma].
+- Per le scelte usa opzioni leggibili con caselle vuote, ad esempio [ ] Sì  [ ] No.
+- Non inventare norme, obblighi, loghi, nomi di istituti o riferimenti ufficiali.
+- Se servono riferimenti normativi non forniti e non verificabili, inserisci una nota breve: "Riferimenti normativi da verificare prima dell'uso".
+- Non chiedere né inserire dati personali reali.
+- Consideralo una bozza da verificare e adattare dalla scuola, non un modulo ufficiale.
+- Mantieni il documento pratico e conciso.
+"""
+                try:
+                    with st.spinner("AVS sta preparando la bozza..."):
+                        client = get_gemini_client(api_key)
+                        risposta_modulo = client.models.generate_content(
+                            model=MODEL_NAME,
+                            contents=prompt_modulo,
+                            config=types.GenerateContentConfig(
+                                system_instruction=(
+                                    "Sei AVS, assistente per le segreterie scolastiche italiane. "
+                                    "Genera bozze prudenti, chiare e pratiche. Non inventare "
+                                    "norme o dichiarare ufficiale un modello generato."
+                                ),
+                                temperature=0.2,
+                                max_output_tokens=1200,
+                            ),
+                        )
+                    testo_generato = (risposta_modulo.text or "").strip()
+                    if not testo_generato:
+                        st.error("Non è arrivato testo. Riprova con una descrizione più precisa.")
+                    else:
+                        st.session_state["modulo_testo_editabile"] = testo_generato
+                        st.session_state["modulo_guidato_pronto"] = True
+                except Exception as exc:
+                    st.error(
+                        "Non è stato possibile generare la bozza. Controlla la connessione "
+                        "e la configurazione di Gemini."
+                    )
+                    st.code(str(exc))
+
+    if st.session_state["modulo_guidato_pronto"] or st.session_state["modulo_testo_editabile"]:
+        st.divider()
+        st.subheader("2. Controlla e correggi la bozza")
+        st.info(
+            "Controlla il testo e i riferimenti prima dell'uso. Le parole tra parentesi quadre "
+            "diventeranno campi compilabili nel PDF."
+        )
+        testo_modulo_finale = st.text_area(
+            "Testo del modulo (puoi modificarlo prima di generare il PDF)",
+            key="modulo_testo_editabile",
+            height=380,
+        )
+        if testo_modulo_finale.strip():
+            try:
+                pdf_bytes = crea_pdf_editabile(testo_modulo_finale)
+                st.download_button(
+                    label="📥 Scarica PDF compilabile",
+                    data=pdf_bytes,
+                    file_name="AVS_modulo_compilabile.pdf",
+                    mime="application/pdf",
+                    key="download_pdf_guidato",
+                    use_container_width=True,
+                )
+            except Exception as exc:
+                st.error(f"Non è stato possibile generare il PDF: {exc}")
+        st.caption(
+            "Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, "
+            "soprattutto su smartphone. Prova il file prima di distribuirlo."
+        )
+
+else:
+    # Mostra la cronologia della sessione.
+    for idx, messaggio in enumerate(st.session_state["messaggi"]):
+        with st.chat_message(messaggio["role"]):
+            if messaggio["role"] == "assistant":
+                formatta_e_mostra(messaggio["content"], idx)
+            else:
+                st.markdown(messaggio["content"])
+
+    domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
+
+    if "prompt_rapido" in st.session_state:
+        domanda = st.session_state.pop("prompt_rapido")
+
+    if domanda:
+        st.session_state["messaggi"].append({"role": "user", "content": domanda})
+
+        with st.chat_message("user"):
+            st.markdown(domanda)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Sto preparando la risposta..."):
+                try:
+                    api_key = st.secrets.get("GEMINI_API_KEY")
+                    if not api_key:
+                        raise ValueError(
+                            "Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud."
+                        )
+
+                    client = get_gemini_client(api_key)
+
+                    contenuti = []
+                    # Invia solo gli ultimi 4 messaggi per mantenere le risposte rapide.
+                    for messaggio in st.session_state["messaggi"][-4:]:
+                        ruolo = "model" if messaggio["role"] == "assistant" else "user"
+                        contenuti.append(
+                            {
+                                "role": ruolo,
+                                "parts": [{"text": messaggio["content"]}],
+                            }
+                        )
+
+                    risposta = client.models.generate_content(
+                        model=MODEL_NAME,
+                        contents=contenuti,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            temperature=0.2,
+                            max_output_tokens=900,
+                        ),
+                    )
+
+                    testo_risposta = (risposta.text or "").strip()
+                    if not testo_risposta:
+                        testo_risposta = (
+                            "Non è arrivato testo nella risposta del modello. "
+                            "Riprova con una domanda più specifica."
+                        )
+
+                    formatta_e_mostra(testo_risposta, len(st.session_state["messaggi"]))
+                    st.session_state["messaggi"].append(
+                        {"role": "assistant", "content": testo_risposta}
+                    )
+
+                except Exception as exc:
+                    st.error(
+                        "Si è verificato un problema durante la richiesta a Gemini. "
+                        "Controlla la chiave API, la connessione e il nome del modello."
+                    )
+                    st.code(str(exc))
