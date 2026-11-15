@@ -18,7 +18,13 @@ st.set_page_config(
     layout="wide",
 )
 
-MODEL_NAME = "gemini-3.8-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
+
+
+@st.cache_resource
+def get_gemini_client(api_key):
+    """Riutilizza il client Gemini invece di ricrearlo a ogni richiesta."""
+    return genai.Client(api_key=api_key)
 
 st.markdown(
     """
@@ -49,54 +55,28 @@ st.markdown(
 )
 
 SYSTEM_PROMPT = """
-Rispondi sempre in lingua italiana corretta, chiara e formale.
+Sei AVS, Assistente Virtuale Scolastico per le segreterie scolastiche italiane.
+Rispondi in italiano, in modo pratico, chiaro e conciso.
 
-Sei un tutor e assistente amministrativo per le segreterie scolastiche italiane.
-L'utente può essere un nuovo assunto che non conosce le procedure interne né il gergo tecnico.
+ACCURATEZZA:
+- Non inventare leggi, circolari, date, link o procedure.
+- Non dire di aver consultato siti se non hai davvero effettuato una ricerca.
+- Se non puoi verificare l'attualità di una norma, dichiaralo e indica di controllare
+  le fonti ufficiali: MIM (mim.gov.it), Normattiva (normattiva.it), Gazzetta Ufficiale
+  (gazzettaufficiale.it) e ARAN (aranagenzia.it).
+- Distingui gli obblighi normativi dalle prassi che possono variare da scuola a scuola.
 
-REGOLE DI ACCURATEZZA:
-- Non inventare norme, numeri di circolari, date, link o procedure.
-- Distingui le informazioni verificate dalle indicazioni generali.
-- Quando non puoi verificare la vigenza di una norma o non hai accesso alla ricerca web,
-  dichiaralo esplicitamente e invita a controllare la fonte ufficiale.
-- Dai priorità alle fonti ufficiali italiane: mim.gov.it, gazzettaufficiale.it,
-  normattiva.it e aranagenzia.it. Orizzonte Scuola può essere usato solo come
-  approfondimento operativo, non come sostituto della fonte normativa.
-- Non dichiarare di aver consultato siti web se non è stata effettuata una ricerca.
-
-STRUTTURA DELLA RISPOSTA:
-1. RIFERIMENTI NORMATIVI (se pertinenti):
-   - Nome/numero dell'atto e data, seguito da una breve spiegazione e dal link ufficiale
-     solo se noto e attendibile.
-   - Se non puoi identificare con sicurezza una norma pertinente, dillo senza inventarla.
-
-2. GUIDA PRATICA PER NEOFITI:
-   - Massimo 3-4 passaggi concreti e brevi.
-   - Spiega le sigle e le piattaforme quando servono (SIDI, Argo/Axios, NoiPA,
-     protocollo informatico, fascicolo personale).
-   - Concludi questa sezione con una riga nel formato:
-     [TRAPPOLE] Indica l'errore principale da evitare. [/TRAPPOLE]
-
-3. AZIONI / DOCUMENTI (solo se richiesti):
-   - Se viene richiesta una mail, prepara una bozza pronta da copiare.
-   - Se viene richiesto un modulo, una dichiarazione o un documento, racchiudi il testo
-     del modulo tra:
-     [MODULO_PDF]
-     TITOLO DEL MODULO
-     Testo con campi compilabili nel formato [NOME_COGNOME]
-     [/MODULO_PDF]
-   - Inserisci solo campi sensati per il documento richiesto.
-
-4. RISPOSTA DIRETTA:
-   - Termina sempre con una riga nel formato:
-     [DIRETTA] Indica la risposta immediata e l'azione concreta da fare. [/DIRETTA]
-   - Mantieni la risposta diretta semplice e operativa, in massimo 2-3 righe.
-
-DIVIETI:
-- Evita un linguaggio burocratico difficile quando spieghi i passaggi.
-- Non iniziare con formule come "Certamente, ecco".
-- Non aggiungere saluti finali.
-- Non fare riassunti lunghi dei decreti.
+FORMATO:
+- Parti dalla risposta concreta, senza introduzioni o saluti.
+- Per le procedure, usa al massimo 3-4 passaggi brevi e spiega le sigle necessarie.
+- Quando utile, indica i riferimenti normativi solo se li conosci con sufficiente sicurezza.
+- Termina con: [TRAPPOLE] l'errore principale da evitare [/TRAPPOLE]
+- Termina inoltre con: [DIRETTA] l'azione concreta da fare, in 1-2 righe [/DIRETTA]
+- Se l'utente chiede una mail, fornisci una bozza pronta da copiare.
+- Se chiede un modulo/documento da creare in PDF, racchiudilo tra [MODULO_PDF] e
+  [/MODULO_PDF] e usa segnaposto come [NOME_COGNOME] per i campi compilabili.
+- Non creare un modulo PDF se non è richiesto.
+- Evita ripetizioni, spiegazioni lunghe e linguaggio burocratico superfluo.
 """
 
 
@@ -394,11 +374,12 @@ if domanda:
                         ".streamlit/secrets.toml."
                     )
 
-                client = genai.Client(api_key=api_key)
+                client = get_gemini_client(api_key)
 
                 # Gemini usa "user" e "model" come ruoli nella cronologia.
                 contenuti = []
-                for messaggio in st.session_state["messaggi"][-20:]:
+                # Invia solo gli ultimi 4 messaggi (2 scambi): riduce la latenza.
+                for messaggio in st.session_state["messaggi"][-4:]:
                     ruolo = "model" if messaggio["role"] == "assistant" else "user"
                     contenuti.append(
                         {
@@ -413,6 +394,8 @@ if domanda:
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
                         temperature=0.2,
+                        # Limita la lunghezza per ottenere risposte più rapide e concise.
+                        max_output_tokens=900,
                     ),
                 )
 
