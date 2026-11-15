@@ -1,238 +1,436 @@
+import io
+import re
+import textwrap
+import unicodedata
+
 import streamlit as st
 from google import genai
 from google.genai import types
-import io
-import re
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
-st.set_page_config(page_title="Assistente Segreteria Scuola", page_icon="🏫", layout="wide")
 
-st.markdown("""
-<style>
-.trappola-box {
-    background-color: #ffebee;
-    border-left: 6px solid #c62828;
-    padding: 15px;
-    border-radius: 5px;
-    margin: 15px 0;
-    color: #b71c1c;
-    font-weight: bold;
-    font-size: 1.05em;
-}
-.risposta-diretta {
-    background-color: #e8f5e9;
-    border-left: 6px solid #2e7d32;
-    padding: 15px;
-    border-radius: 5px;
-    margin-top: 20px;
-    color: #1b5e20;
-    font-weight: bold;
-    font-size: 1.1em;
-}
-</style>
-""", unsafe_allow_html=True)
+# -------------------- CONFIGURAZIONE --------------------
+st.set_page_config(
+    page_title="Assistente Segreteria Scuola",
+    page_icon="🏫",
+    layout="wide",
+)
+
+MODEL_NAME = "gemini-2.5-flash"
+
+st.markdown(
+    """
+    <style>
+    .trappola-box {
+        background-color: #ffebee;
+        border-left: 6px solid #c62828;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 15px 0;
+        color: #b71c1c;
+        font-weight: bold;
+        font-size: 1.05em;
+    }
+    .risposta-diretta {
+        background-color: #e8f5e9;
+        border-left: 6px solid #2e7d32;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 20px;
+        color: #1b5e20;
+        font-weight: bold;
+        font-size: 1.05em;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 SYSTEM_PROMPT = """
-Rispondi sempre ed esclusivamente in lingua italiana corretta, chiara e formale.
+Rispondi sempre in lingua italiana corretta, chiara e formale.
 
-Sei un tutor e assistente amministrativo per le segreterie scolastiche italiane. Il tuo utente principale è un nuovo assunto neofita (es. Assistente Amministrativo alla prima nomina) che non conosce le procedure interne né il gergo tecnico.
+Sei un tutor e assistente amministrativo per le segreterie scolastiche italiane.
+L'utente può essere un nuovo assunto che non conosce le procedure interne né il gergo tecnico.
 
-REGOLE DI RICERCA:
-1. Dai priorità assoluta alle norme, decreti legge, circolari e note più recenti (anno 2026 e precedenti in vigore) verificando che non siano abrogate.
-2. Usa esclusivamente fonti ufficiali e autorevoli italiane: mim.gov.it, gazzettaufficiale.it, normattiva.it, aranagenzia.it e orizzontescuola.it per gli approfondimenti operativi.
+REGOLE DI ACCURATEZZA:
+- Non inventare norme, numeri di circolari, date, link o procedure.
+- Distingui le informazioni verificate dalle indicazioni generali.
+- Quando non puoi verificare la vigenza di una norma o non hai accesso alla ricerca web,
+  dichiaralo esplicitamente e invita a controllare la fonte ufficiale.
+- Dai priorità alle fonti ufficiali italiane: mim.gov.it, gazzettaufficiale.it,
+  normattiva.it e aranagenzia.it. Orizzonte Scuola può essere usato solo come
+  approfondimento operativo, non come sostituto della fonte normativa.
+- Non dichiarare di aver consultato siti web se non è stata effettuata una ricerca.
 
-STRUTTURA OBBLIGATORIA DELLA RISPOSTA (Rispetta rigorosamente questo ordine dall'alto verso il basso):
+STRUTTURA DELLA RISPOSTA:
+1. RIFERIMENTI NORMATIVI (se pertinenti):
+   - Nome/numero dell'atto e data, seguito da una breve spiegazione e dal link ufficiale
+     solo se noto e attendibile.
+   - Se non puoi identificare con sicurezza una norma pertinente, dillo senza inventarla.
 
-1. **RIFERIMENTI NORMATIVI (Compressi):**
-   * **[Nome/Numero Atto + Data]**: riassunto in 1 sola riga semplice di cosa stabilisce. (Inserisci il link ufficiale se disponibile).
+2. GUIDA PRATICA PER NEOFITI:
+   - Massimo 3-4 passaggi concreti e brevi.
+   - Spiega le sigle e le piattaforme quando servono (SIDI, Argo/Axios, NoiPA,
+     protocollo informatico, fascicolo personale).
+   - Concludi questa sezione con una riga nel formato:
+     [TRAPPOLE] Indica l'errore principale da evitare. [/TRAPPOLE]
 
-2. **GUIDA PRATICA PER NEOFITI (Passo-passo):**
-   * Spiega in massimo 3-4 punti brevi cosa fare concretamente in ufficio.
-   * Traduci sempre eventuali sigle o piattaforme (es. spiega brevemente cos'è SIDI, Argo/Axios, NoiPA, Protocollo o Fascicolo Personale se vanno usati).
-   * Chiudi questa sezione andando a capo e scrivendo ESATTAMENTE questo marcatore su una riga da sola:
-     [TRAPPOLE] Testo della trappola principale o cosa non fare mai [/TRAPPOLE]
-
-3. **AZIONI / DOCUMENTI (Solo se richiesti):**
-   * Se l'utente chiede una mail: scrivila pronta da copiare, formale ma chiara e sintetica.
-   * Se l'utente chiede un modulo, una dichiarazione o un documento da compilare: racchiudi la struttura del modulo tra questi marcatori esatti e usa le parentesi quadre per i campi compilabili (es. [NOME_COGNOME], [DATA_NASCITA], [CODICE_FISCALE]):
+3. AZIONI / DOCUMENTI (solo se richiesti):
+   - Se viene richiesta una mail, prepara una bozza pronta da copiare.
+   - Se viene richiesto un modulo, una dichiarazione o un documento, racchiudi il testo
+     del modulo tra:
      [MODULO_PDF]
      TITOLO DEL MODULO
-     Testo del modulo con i campi [CAMPO_COMPILABILE]
+     Testo con campi compilabili nel formato [NOME_COGNOME]
      [/MODULO_PDF]
+   - Inserisci solo campi sensati per il documento richiesto.
 
-4. **RISPOSTA DIRETTA (SEMPRE IN FONDO):**
-   Chiudi obbligatoriamente il messaggio con questo marcatore esatto su una riga da sola, contenente massimo 2-3 righe in linguaggio semplice e operativo:
-   [DIRETTA] Risposta immediata e azione concreta da fare subito [/DIRETTA]
+4. RISPOSTA DIRETTA:
+   - Termina sempre con una riga nel formato:
+     [DIRETTA] Indica la risposta immediata e l'azione concreta da fare. [/DIRETTA]
+   - Mantieni la risposta diretta semplice e operativa, in massimo 2-3 righe.
 
 DIVIETI:
-- Non usare linguaggio burocratico difficile quando spieghi i passaggi al neofita.
-- Non scrivere introduzioni ("Certamente, ecco...") né saluti finali fuori dai marcatori.
+- Evita un linguaggio burocratico difficile quando spieghi i passaggi.
+- Non iniziare con formule come "Certamente, ecco".
+- Non aggiungere saluti finali.
 - Non fare riassunti lunghi dei decreti.
 """
 
+
+# -------------------- PDF COMPILABILE --------------------
+def nome_campo_sicuro(testo, indice):
+    """Crea un nome PDF semplice e univoco."""
+    testo_ascii = (
+        unicodedata.normalize("NFKD", testo)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    testo_ascii = re.sub(r"[^A-Za-z0-9_]+", "_", testo_ascii).strip("_")
+    return f"campo_{indice}_{testo_ascii[:24] or 'testo'}"
+
+
 def crea_pdf_editabile(testo_modulo):
+    """Genera un PDF A4 con campi interattivi per i segnaposto [CAMPO]."""
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
+    pdf = canvas.Canvas(buffer, pagesize=A4)
     larghezza, altezza = A4
-    form = c.acroForm
+    margine_sinistro = 50
+    margine_destro = 50
+    larghezza_testo = larghezza - margine_sinistro - margine_destro
+    y_iniziale = altezza - 82
+    y = y_iniziale
+    numero_campo = 0
 
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(50, altezza - 45, "ISTITUTO SCOLASTICO STATALE - SEGRETERIA AMMINISTRATIVA")
-    c.setStrokeColor(colors.grey)
-    c.line(50, altezza - 52, larghezza - 50, altezza - 52)
+    def intestazione():
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(
+            margine_sinistro,
+            altezza - 40,
+            "ISTITUTO SCOLASTICO STATALE - SEGRETERIA AMMINISTRATIVA",
+        )
+        pdf.setStrokeColor(colors.grey)
+        pdf.line(
+            margine_sinistro,
+            altezza - 50,
+            larghezza - margine_destro,
+            altezza - 50,
+        )
 
-    y = altezza - 85
-    righe = testo_modulo.strip().split("\n")
+    def nuova_pagina():
+        nonlocal y
+        pdf.showPage()
+        intestazione()
+        y = altezza - 72
 
-    for i, riga in enumerate(righe):
-        riga = riga.strip()
+    intestazione()
+    righe = testo_modulo.strip().splitlines()
+
+    for indice_riga, riga_originale in enumerate(righe):
+        riga = riga_originale.strip()
+
         if not riga:
-            y -= 14
-            continue
-        if y < 80:
-            c.showPage()
-            form = c.acroForm
-            y = altezza - 60
-        if i == 0:
-            c.setFont("Helvetica-Bold", 13)
-            c.drawString(50, y, riga[:80])
-            y -= 28
+            y -= 12
+            if y < 65:
+                nuova_pagina()
             continue
 
-        campi = re.findall(r'\[([^\]]+)\]', riga)
-        if campi:
-            parti = re.split(r'(\[[^\]]+\])', riga)
-            x = 50
-            c.setFont("Helvetica", 10)
-            for idx, parte in enumerate(parti):
-                if parte.startswith("[") and parte.endswith("]"):
-                    nome_campo = f"campo_{i}_{idx}_{parte[1:-1][:12]}"
-                    larghezza_campo = 155
-                    if x + larghezza_campo > larghezza - 50:
-                        y -= 24
-                        x = 50
-                    form.textfield(
-                        name=nome_campo,
-                        tooltip=parte[1:-1],
-                        x=x,
-                        y=y - 4,
-                        width=larghezza_campo,
-                        height=18,
-                        borderStyle='underlined',
-                        borderColor=colors.darkblue,
-                        fillColor=colors.Color(0.95, 0.97, 1.0),
-                        textColor=colors.black,
-                        fontSize=10
-                    )
-                    x += larghezza_campo + 8
-                elif parte:
-                    c.drawString(x, y, parte)
-                    x += c.stringWidth(parte, "Helvetica", 10) + 4
-            y -= 24
-        else:
-            c.setFont("Helvetica", 10)
-            parole = riga.split(" ")
-            linea_corrente = ""
+        if y < 70:
+            nuova_pagina()
+
+        if indice_riga == 0:
+            pdf.setFont("Helvetica-Bold", 13)
+            parole = riga.split()
+            linea = ""
             for parola in parole:
-                if c.stringWidth(linea_corrente + " " + parola, "Helvetica", 10) < (larghezza - 100):
-                    linea_corrente += (" " if linea_corrente else "") + parola
+                candidata = f"{linea} {parola}".strip()
+                if pdf.stringWidth(candidata, "Helvetica-Bold", 13) <= larghezza_testo:
+                    linea = candidata
                 else:
-                    c.drawString(50, y, linea_corrente)
-                    y -= 16
-                    linea_corrente = parola
-            if linea_corrente:
-                c.drawString(50, y, linea_corrente)
-                y -= 18
+                    pdf.drawString(margine_sinistro, y, linea)
+                    y -= 18
+                    linea = parola
+            if linea:
+                pdf.drawString(margine_sinistro, y, linea)
+                y -= 26
+            continue
 
-    c.save()
+        # Per rendere il modulo leggibile, ogni segnaposto ha una riga dedicata.
+        parti = re.split(r"(\[[^\]]+\])", riga)
+        pdf.setFont("Helvetica", 10)
+        testo_corrente = ""
+
+        def disegna_testo_wrappato(testo, font="Helvetica", dimensione=10):
+            nonlocal y
+            parole = testo.split()
+            linea_local = ""
+            for parola in parole:
+                candidata = f"{linea_local} {parola}".strip()
+                if pdf.stringWidth(candidata, font, dimensione) <= larghezza_testo:
+                    linea_local = candidata
+                else:
+                    if linea_local:
+                        pdf.setFont(font, dimensione)
+                        pdf.drawString(margine_sinistro, y, linea_local)
+                        y -= 15
+                        if y < 65:
+                            nuova_pagina()
+                    linea_local = parola
+            if linea_local:
+                pdf.setFont(font, dimensione)
+                pdf.drawString(margine_sinistro, y, linea_local)
+                y -= 17
+                if y < 65:
+                    nuova_pagina()
+
+        for parte in parti:
+            if parte.startswith("[") and parte.endswith("]"):
+                if testo_corrente.strip():
+                    disegna_testo_wrappato(testo_corrente.strip())
+                    testo_corrente = ""
+
+                etichetta = parte[1:-1].strip() or "Campo"
+                # Etichetta e campo sono separati: evita di oltrepassare i margini.
+                pdf.setFont("Helvetica", 9)
+                etichetta_visuale = f"{etichetta}:"
+                pdf.drawString(margine_sinistro, y, etichetta_visuale)
+                y -= 19
+                if y < 75:
+                    nuova_pagina()
+
+                numero_campo += 1
+                larghezza_campo = larghezza_testo
+                altezza_campo = 20
+                pdf.acroForm.textfield(
+                    name=nome_campo_sicuro(etichetta, numero_campo),
+                    tooltip=etichetta,
+                    x=margine_sinistro,
+                    y=y - 3,
+                    width=larghezza_campo,
+                    height=altezza_campo,
+                    borderStyle="underlined",
+                    borderWidth=1,
+                    borderColor=colors.darkblue,
+                    fillColor=colors.Color(0.97, 0.98, 1.0),
+                    textColor=colors.black,
+                    forceBorder=True,
+                    fontName="Helvetica",
+                    fontSize=10,
+                )
+                y -= 29
+                if y < 65:
+                    nuova_pagina()
+            else:
+                testo_corrente += parte
+
+        if testo_corrente.strip():
+            disegna_testo_wrappato(testo_corrente.strip())
+
+    pdf.save()
     buffer.seek(0)
-    return buffer
+    return buffer.getvalue()
 
+
+# -------------------- RENDER DELLA RISPOSTA --------------------
 def formatta_e_mostra(testo, indice_msg):
-    testo_pulito = testo
+    testo_pulito = testo or ""
 
-    match_trappola = re.search(r'\[TRAPPOLE\](.*?)\[/TRAPPOLE\]', testo_pulito, re.DOTALL)
+    match_trappola = re.search(
+        r"\[TRAPPOLE\](.*?)\[/TRAPPOLE\]", testo_pulito, re.DOTALL | re.IGNORECASE
+    )
     trappola_html = ""
     if match_trappola:
-        contenuto_trappola = match_trappola.group(1).strip()
-        trappola_html = f'<div class="trappola-box">🚨 ERRORE DA EVITARE: {contenuto_trappola}</div>'
+        contenuto = match_trappola.group(1).strip()
+        trappola_html = (
+            '<div class="trappola-box">🚨 ERRORE DA EVITARE: '
+            + contenuto
+            + "</div>"
+        )
         testo_pulito = testo_pulito.replace(match_trappola.group(0), "")
 
-    match_modulo = re.search(r'\[MODULO_PDF\](.*?)\[/MODULO_PDF\]', testo_pulito, re.DOTALL)
+    match_modulo = re.search(
+        r"\[MODULO_PDF\](.*?)\[/MODULO_PDF\]",
+        testo_pulito,
+        re.DOTALL | re.IGNORECASE,
+    )
     testo_modulo = None
     if match_modulo:
         testo_modulo = match_modulo.group(1).strip()
-        testo_pulito = testo_pulito.replace(match_modulo.group(0), "\n*(📄 Modulo generato e pronto per il download qui sotto)*\n")
+        testo_pulito = testo_pulito.replace(
+            match_modulo.group(0),
+            "\n\n**📄 Modulo generato e pronto per il download qui sotto.**\n\n",
+        )
 
-    match_diretta = re.search(r'\[DIRETTA\](.*?)\[/DIRETTA\]', testo_pulito, re.DOTALL)
+    match_diretta = re.search(
+        r"\[DIRETTA\](.*?)\[/DIRETTA\]",
+        testo_pulito,
+        re.DOTALL | re.IGNORECASE,
+    )
     diretta_html = ""
     if match_diretta:
-        contenuto_diretta = match_diretta.group(1).strip()
-        diretta_html = f'<div class="risposta-diretta">✅ RISPOSTA DIRETTA: {contenuto_diretta}</div>'
+        contenuto = match_diretta.group(1).strip()
+        diretta_html = (
+            '<div class="risposta-diretta">✅ RISPOSTA DIRETTA: '
+            + contenuto
+            + "</div>"
+        )
         testo_pulito = testo_pulito.replace(match_diretta.group(0), "")
 
-    st.markdown(testo_pulito.strip())
+    if testo_pulito.strip():
+        st.markdown(testo_pulito.strip())
 
     if trappola_html:
         st.markdown(trappola_html, unsafe_allow_html=True)
 
     if testo_modulo:
-        with st.expander("Anteprima testo del modulo", expanded=False):
+        with st.expander("Anteprima del testo del modulo", expanded=False):
             st.text(testo_modulo)
-        pdf_bytes = crea_pdf_editabile(testo_modulo)
-        st.download_button(
-            label="📥 Scarica PDF Editabile",
-            data=pdf_bytes,
-            file_name=f"Modulo_Segreteria_{indice_msg}.pdf",
-            mime="application/pdf",
-            key=f"btn_pdf_{indice_msg}"
-        )
+
+        try:
+            pdf_bytes = crea_pdf_editabile(testo_modulo)
+            st.download_button(
+                label="📥 Scarica PDF compilabile",
+                data=pdf_bytes,
+                file_name=f"Modulo_Segreteria_{indice_msg}.pdf",
+                mime="application/pdf",
+                key=f"btn_pdf_{indice_msg}",
+            )
+        except Exception as exc:
+            st.error(f"Non è stato possibile generare il PDF: {exc}")
 
     if diretta_html:
         st.markdown(diretta_html, unsafe_allow_html=True)
 
+
+# -------------------- INTERFACCIA STREAMLIT --------------------
 st.title("🏫 Assistente Virtuale Segreteria Scolastica")
-st.caption("Guida operativa per neofiti e personale amministrativo | Fonti ufficiali MIM, Normattiva, ARAN e Orizzonte Scuola")
+st.caption(
+    "Guida operativa per il personale amministrativo | "
+    "Fonti di riferimento: MIM, Normattiva, Gazzetta Ufficiale e ARAN"
+)
 
 with st.sidebar:
-    st.header("⚡ Azioni Rapide")
-    st.markdown("Clicca su una procedura frequente:")
-    if st.button("📋 Presa di servizio supplente"):
-        st.session_state["prompt_rapido"] = "Un docente supplente deve prendere servizio oggi. Quali passaggi devo fare al SIDI e al protocollo? Prepara anche il modulo di dichiarazione di presa di servizio."
-    if st.button("🤒 Supplente in malattia il 1° giorno"):
-        st.session_state["prompt_rapido"] = "Un supplente nominato da graduatoria ha la febbre il giorno della presa di servizio e chiede di venire solo a firmare il contratto per poi mettersi in malattia. Come devo comportarmi?"
-    if st.button("✉️ Mail convocazione / chiarimento"):
-        st.session_state["prompt_rapido"] = "Scrivi una mail formale da inviare a un docente per richiedere l'integrazione dei documenti mancanti per la ricostruzione di carriera."
+    st.header("⚡ Azioni rapide")
+    st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
+
+    if st.button("📋 Presa di servizio supplente", use_container_width=True):
+        st.session_state["prompt_rapido"] = (
+            "Un docente supplente deve prendere servizio oggi ma ha la febbre "
+            "e non può venire fisicamente a firmare. Come devo procedere? "
+            "Prepara anche una bozza di modulo editabile per la presa di servizio."
+        )
+
+    if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
+        st.session_state["prompt_rapido"] = (
+            "Un docente mi ha comunicato stamattina di essere in malattia. "
+            "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
+            "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola."
+        )
+
+    if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
+        st.session_state["prompt_rapido"] = (
+            "Devo inviare una convocazione urgente per supplenza breve tramite "
+            "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
+            "editabile. Indica quali dati devo verificare prima dell'invio."
+        )
+
     st.divider()
-    if st.button("🗑️ Nuova conversazione"):
+
+    if st.button("🗑️ Nuova conversazione", use_container_width=True):
         st.session_state["messaggi"] = []
         st.rerun()
 
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
 
-for idx, msg in enumerate(st.session_state["messaggi"]):
-    with st.chat_message(msg["role"]):
-        if msg["role"] == "assistant":
-            formatta_e_mostra(msg["content"], idx)
+# Mostra la cronologia della sessione.
+for idx, messaggio in enumerate(st.session_state["messaggi"]):
+    with st.chat_message(messaggio["role"]):
+        if messaggio["role"] == "assistant":
+            formatta_e_mostra(messaggio["content"], idx)
         else:
-            st.markdown(msg["content"])
+            st.markdown(messaggio["content"])
 
-domanda = st.chat_input("Scrivi qui il tuo quesito amministrativo (es. 'Come registro un'assenza per visita specialistica?')...")
+domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
 
 if "prompt_rapido" in st.session_state:
     domanda = st.session_state.pop("prompt_rapido")
 
 if domanda:
     st.session_state["messaggi"].append({"role": "user", "content": domanda})
+
     with st.chat_message("user"):
         st.markdown(domanda)
 
     with st.chat_message("assistant"):
-        with st.spinner("Consulto le normative ufficiali 2026 e Orizzonte Scuola..."):
+        with st.spinner("Sto preparando la risposta..."):
             try:
-                api_key = st.secrets["GEMINI_API_KEY"]
+                api_key = st.secrets.get("GEMINI_API_KEY")
+                if not api_key:
+                    raise ValueError(
+                        "Chiave API mancante. Configura GEMINI_API_KEY nel file "
+                        ".streamlit/secrets.toml."
+                    )
+
                 client = genai.Client(api_key=api_key)
-                response = client.models.generate_content(
+
+                # Gemini usa "user" e "model" come ruoli nella cronologia.
+                contenuti = []
+                for messaggio in st.session_state["messaggi"][-20:]:
+                    ruolo = "model" if messaggio["role"] == "assistant" else "user"
+                    contenuti.append(
+                        {
+                            "role": ruolo,
+                            "parts": [{"text": messaggio["content"]}],
+                        }
+                    )
+
+                risposta = client.models.generate_content(
+                    model=MODEL_NAME,
+                    contents=contenuti,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.2,
+                    ),
+                )
+
+                testo_risposta = (risposta.text or "").strip()
+                if not testo_risposta:
+                    testo_risposta = (
+                        "Non è arrivato testo nella risposta del modello. "
+                        "Riprova con una domanda più specifica."
+                    )
+
+                formatta_e_mostra(testo_risposta, len(st.session_state["messaggi"]))
+                st.session_state["messaggi"].append(
+                    {"role": "assistant", "content": testo_risposta}
+                )
+
+            except Exception as exc:
+                st.error(
+                    "Si è verificato un problema durante la richiesta a Gemini. "
+                    "Controlla la chiave API, la connessione e il nome del modello."
+                )
+                st.code(str(exc))
