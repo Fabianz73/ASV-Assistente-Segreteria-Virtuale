@@ -30,25 +30,173 @@ def get_gemini_client(api_key):
 st.markdown(
     """
     <style>
-    .trappola-box {
-        background-color: #ffebee;
-        border-left: 6px solid #c62828;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 15px 0;
-        color: #b71c1c;
-        font-weight: bold;
-        font-size: 1.05em;
+    @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800;900&display=swap');
+
+    :root {
+        --avs-lavender: #8172B8;
+        --avs-lavender-dark: #62548F;
+        --avs-lavender-pale: #F1EDFA;
+        --avs-sage: #6F9D8C;
+        --avs-sage-pale: #EAF4EF;
+        --avs-cream: #FBF9F6;
+        --avs-ink: #302D38;
+        --avs-muted: #77727F;
+        --avs-border: #E6E0EA;
     }
+
+    html, body, [class*="css"], [data-testid="stAppViewContainer"] {
+        font-family: 'Nunito Sans', sans-serif;
+        color: var(--avs-ink);
+    }
+
+    [data-testid="stAppViewContainer"] {
+        background: var(--avs-cream);
+    }
+
+    [data-testid="stHeader"] {
+        background: rgba(251, 249, 246, 0.92);
+    }
+
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #F3EFFA 0%, #F8F6F3 58%, #EEF5F0 100%);
+        border-right: 1px solid var(--avs-border);
+    }
+
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: var(--avs-ink);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+    }
+
+    h1, h2, h3 {
+        font-family: 'Nunito Sans', sans-serif !important;
+        color: var(--avs-ink);
+        font-weight: 800 !important;
+        letter-spacing: -0.035em;
+    }
+
+    h1 { line-height: 1.18; }
+    p, label, li, .stMarkdown, .stCaption {
+        font-family: 'Nunito Sans', sans-serif;
+    }
+
+    [data-testid="stCaptionContainer"] p {
+        color: var(--avs-muted);
+        font-size: 0.94rem;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        line-height: 1.6;
+    }
+
+    /* Pulsanti: morbidi, ma con contrasto sufficiente */
+    .stButton > button, .stDownloadButton > button, .stLinkButton > a,
+    [data-testid="stFormSubmitButton"] button {
+        border-radius: 13px;
+        border: 1px solid #DED6E8;
+        background: #FFFFFF;
+        color: var(--avs-lavender-dark);
+        font-family: 'Nunito Sans', sans-serif;
+        font-weight: 700;
+        transition: all 0.18s ease;
+        box-shadow: 0 2px 7px rgba(65, 48, 87, 0.04);
+    }
+
+    .stButton > button:hover, .stDownloadButton > button:hover,
+    .stLinkButton > a:hover, [data-testid="stFormSubmitButton"] button:hover {
+        border-color: var(--avs-lavender);
+        background: var(--avs-lavender-pale);
+        color: #493B75;
+        transform: translateY(-1px);
+    }
+
+    [data-testid="stFormSubmitButton"] button,
+    .stDownloadButton > button {
+        background: var(--avs-lavender);
+        border-color: var(--avs-lavender);
+        color: #FFFFFF;
+    }
+
+    [data-testid="stFormSubmitButton"] button:hover,
+    .stDownloadButton > button:hover {
+        background: var(--avs-lavender-dark);
+        color: #FFFFFF;
+    }
+
+    /* Campi di testo chiari e arrotondati */
+    .stTextInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"],
+    .stMultiSelect [data-baseweb="select"] {
+        border-radius: 12px;
+        border-color: #DCD5E4;
+        background: #FFFFFF;
+    }
+
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--avs-lavender);
+        box-shadow: 0 0 0 2px rgba(129, 114, 184, 0.14);
+    }
+
+    [data-testid="stChatMessage"] {
+        border: 1px solid var(--avs-border);
+        border-radius: 18px;
+        padding: 1rem 1.15rem;
+        background: #FFFFFF;
+        box-shadow: 0 3px 12px rgba(55, 45, 68, 0.035);
+    }
+
+    [data-testid="stChatInput"] {
+        border-radius: 16px;
+        border-color: #DCD5E4;
+        background: #FFFFFF;
+        box-shadow: 0 4px 18px rgba(55, 45, 68, 0.06);
+    }
+
+    [data-testid="stExpander"] {
+        border: 1px solid var(--avs-border);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.78);
+    }
+
+    [data-testid="stAlert"] {
+        border-radius: 14px;
+    }
+
+    .trappola-box {
+        background-color: #FFF0ED;
+        border-left: 5px solid #C96D61;
+        padding: 15px 17px;
+        border-radius: 12px;
+        margin: 15px 0;
+        color: #843E37;
+        font-weight: 700;
+        font-size: 1.02em;
+    }
+
     .risposta-diretta {
-        background-color: #e8f5e9;
-        border-left: 6px solid #2e7d32;
-        padding: 15px;
-        border-radius: 5px;
+        background-color: var(--avs-sage-pale);
+        border-left: 5px solid var(--avs-sage);
+        padding: 15px 17px;
+        border-radius: 12px;
         margin-top: 20px;
-        color: #1b5e20;
-        font-weight: bold;
-        font-size: 1.05em;
+        color: #285B49;
+        font-weight: 700;
+        font-size: 1.02em;
+    }
+
+    /* Selezione radio in tonalità lavanda */
+    [data-testid="stRadio"] label {
+        border-radius: 10px;
+    }
+
+    hr {
+        border-color: var(--avs-border);
+    }
+
+    @media (max-width: 768px) {
+        h1 { font-size: 1.8rem !important; }
+        [data-testid="stChatMessage"] { padding: 0.8rem; }
     }
     </style>
     """,
@@ -306,10 +454,28 @@ def formatta_e_mostra(testo, indice_msg):
 
 
 # -------------------- INTERFACCIA STREAMLIT --------------------
-st.title("🏫 AVS - Assistente Virtuale Scolastico")
+st.title("🏫 AVS Office")
 st.caption(
-    "Guida operativa per il personale amministrativo | "
-    "Fonti di riferimento: MIM, Normattiva, Gazzetta Ufficiale e ARAN"
+    "Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria"
+)
+st.markdown(
+    """
+    <div style="
+        background: linear-gradient(115deg, #F0EBFA 0%, #F8F5FB 54%, #EAF4EF 100%);
+        border: 1px solid #E6E0EA;
+        border-radius: 18px;
+        padding: 17px 22px;
+        margin: 8px 0 22px 0;
+    ">
+      <div style="font-size: 1.08rem; font-weight: 800; color: #40384F;">
+        La tua segreteria, un po’ più semplice ✨
+      </div>
+      <div style="font-size: 0.92rem; color: #716B79; margin-top: 4px;">
+        Procedure, risposte operative e moduli compilabili in un unico spazio.
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if "messaggi" not in st.session_state:
