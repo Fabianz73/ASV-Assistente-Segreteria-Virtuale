@@ -1,4 +1,3 @@
-
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -8,11 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 
-st.set_page_config(
-    page_title="Assistente Segreteria Scuola",
-    page_icon="🏫",
-    layout="wide"
-)
+st.set_page_config(page_title="Assistente Segreteria Scuola", page_icon="🏫", layout="wide")
 
 st.markdown("""
 <style>
@@ -61,7 +56,7 @@ STRUTTURA OBBLIGATORIA DELLA RISPOSTA (Rispetta rigorosamente questo ordine dall
 
 3. **AZIONI / DOCUMENTI (Solo se richiesti):**
    * Se l'utente chiede una mail: scrivila pronta da copiare, formale ma chiara e sintetica.
-   * Se l'utente chiede un modulo, una dichiarazione o un documento da compilare: racchiudi la struttura del modulo tra questi marcatori esatti e usa le parentesi quadre per i campi compilabili (es. [NOME_COGNOME], [DATA_NASCITA], [CODICE_FISCALE], [CLASSE_CONCORSO]):
+   * Se l'utente chiede un modulo, una dichiarazione o un documento da compilare: racchiudi la struttura del modulo tra questi marcatori esatti e usa le parentesi quadre per i campi compilabili (es. [NOME_COGNOME], [DATA_NASCITA], [CODICE_FISCALE]):
      [MODULO_PDF]
      TITOLO DEL MODULO
      Testo del modulo con i campi [CAMPO_COMPILABILE]
@@ -96,12 +91,10 @@ def crea_pdf_editabile(testo_modulo):
         if not riga:
             y -= 14
             continue
-
         if y < 80:
             c.showPage()
             form = c.acroForm
             y = altezza - 60
-
         if i == 0:
             c.setFont("Helvetica-Bold", 13)
             c.drawString(50, y, riga[:80])
@@ -115,8 +108,8 @@ def crea_pdf_editabile(testo_modulo):
             c.setFont("Helvetica", 10)
             for idx, parte in enumerate(parti):
                 if parte.startswith("[") and parte.endswith("]"):
-                    nome_campo = f"campo_{i}_{idx}_{parte[1:-1][:15]}"
-                    larghezza_campo = 160
+                    nome_campo = f"campo_{i}_{idx}_{parte[1:-1][:12]}"
+                    larghezza_campo = 155
                     if x + larghezza_campo > larghezza - 50:
                         y -= 24
                         x = 50
@@ -205,23 +198,17 @@ st.caption("Guida operativa per neofiti e personale amministrativo | Fonti uffic
 
 with st.sidebar:
     st.header("⚡ Azioni Rapide")
-    st.markdown("Clicca su una procedura frequente per avviarla subito:")
+    st.markdown("Clicca su una procedura frequente:")
     if st.button("📋 Presa di servizio supplente"):
-        st.session_state["prompt_rapido"] = "Qual è la procedura esatta e quali documenti servono per la presa di servizio di un docente supplente?"
-    if st.button("🤒 Assenza per malattia"):
-        st.session_state["prompt_rapido"] = "Come si gestisce l'assenza per malattia di un docente o ATA e quando parte la visita fiscale?"
-    if st.button("📄 Genera Modulo Presa Servizio"):
-        st.session_state["prompt_rapido"] = "Prepara il modulo compilabile di assunzione in servizio per un docente supplente con tutti i campi anagrafici e di nomina."
+        st.session_state["prompt_rapido"] = "Un docente supplente deve prendere servizio oggi. Quali passaggi devo fare al SIDI e al protocollo? Prepara anche il modulo di dichiarazione di presa di servizio."
+    if st.button("🤒 Supplente in malattia il 1° giorno"):
+        st.session_state["prompt_rapido"] = "Un supplente nominato da graduatoria ha la febbre il giorno della presa di servizio e chiede di venire solo a firmare il contratto per poi mettersi in malattia. Come devo comportarmi?"
+    if st.button("✉️ Mail convocazione / chiarimento"):
+        st.session_state["prompt_rapido"] = "Scrivi una mail formale da inviare a un docente per richiedere l'integrazione dei documenti mancanti per la ricostruzione di carriera."
     st.divider()
     if st.button("🗑️ Nuova conversazione"):
         st.session_state["messaggi"] = []
         st.rerun()
-
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("⚠️ Chiave API mancante! Inserisci GEMINI_API_KEY nelle impostazioni Secrets di Streamlit.")
-    st.stop()
-
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
@@ -233,11 +220,10 @@ for idx, msg in enumerate(st.session_state["messaggi"]):
         else:
             st.markdown(msg["content"])
 
-domanda = st.chat_input("Scrivi qui il tuo quesito amministrativo o chiedi un modulo...")
+domanda = st.chat_input("Scrivi qui il tuo quesito amministrativo (es. 'Come registro un'assenza per visita specialistica?')...")
 
-if "prompt_rapido" in st.session_state and st.session_state["prompt_rapido"]:
-    domanda = st.session_state["prompt_rapido"]
-    del st.session_state["prompt_rapido"]
+if "prompt_rapido" in st.session_state:
+    domanda = st.session_state.pop("prompt_rapido")
 
 if domanda:
     st.session_state["messaggi"].append({"role": "user", "content": domanda})
@@ -246,4 +232,7 @@ if domanda:
 
     with st.chat_message("assistant"):
         with st.spinner("Consulto le normative ufficiali 2026 e Orizzonte Scuola..."):
-     
+            try:
+                api_key = st.secrets["GEMINI_API_KEY"]
+                client = genai.Client(api_key=api_key)
+                response = client.models.generate_content(
