@@ -499,26 +499,50 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
+        codice_meccanografico = st.text_input(
+            "Codice meccanografico della scuola *",
+            key="codice_meccanografico_scuola",
+            placeholder="Es. RMIC000000",
+            help="Inserisci il codice del tuo istituto: verrà incluso nelle richieste avviate con le azioni rapide.",
+        ).strip().upper()
+        st.caption("Il codice è richiesto per avviare le azioni rapide.")
+
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
-            st.session_state["prompt_rapido"] = (
-                "Un docente supplente deve prendere servizio oggi ma ha la febbre "
-                "e non può venire fisicamente a firmare. Come devo procedere? "
-                "Prepara anche una bozza di modulo editabile per la presa di servizio."
-            )
+            if not codice_meccanografico:
+                st.warning("Inserisci prima il codice meccanografico della scuola.")
+            else:
+                st.session_state["prompt_rapido"] = (
+                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    "Un docente supplente deve prendere servizio oggi ma ha la febbre "
+                    "e non può venire fisicamente a firmare. Come devo procedere? "
+                    "Prepara anche una bozza di modulo editabile per la presa di servizio. "
+                    "Usa il codice meccanografico indicato nei riferimenti del documento, "
+                    "senza inventare altri dati dell'istituto."
+                )
 
         if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
-            st.session_state["prompt_rapido"] = (
-                "Un docente mi ha comunicato stamattina di essere in malattia. "
-                "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
-                "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola."
-            )
+            if not codice_meccanografico:
+                st.warning("Inserisci prima il codice meccanografico della scuola.")
+            else:
+                st.session_state["prompt_rapido"] = (
+                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    "Un docente mi ha comunicato stamattina di essere in malattia. "
+                    "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
+                    "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
+                    "Non inventare altri dati dell'istituto."
+                )
 
         if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
-            st.session_state["prompt_rapido"] = (
-                "Devo inviare una convocazione urgente per supplenza breve tramite "
-                "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
-                "editabile. Indica quali dati devo verificare prima dell'invio."
-            )
+            if not codice_meccanografico:
+                st.warning("Inserisci prima il codice meccanografico della scuola.")
+            else:
+                st.session_state["prompt_rapido"] = (
+                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    "Devo inviare una convocazione urgente per supplenza breve tramite "
+                    "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
+                    "editabile. Indica quali dati devo verificare prima dell'invio e inserisci "
+                    "il codice meccanografico fornito senza inventare altri dati dell'istituto."
+                )
 
         st.divider()
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
