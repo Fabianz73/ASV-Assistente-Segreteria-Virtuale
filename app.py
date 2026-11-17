@@ -593,16 +593,11 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
-        nome_scuola = st.text_input(
-            "Nome dell’istituto (facoltativo)",
-            key="nome_scuola_avs",
-            placeholder="Es. I.C. Alessandro Manzoni",
-            help="Puoi indicare la scuola per personalizzare le bozze. Non viene eseguita una ricerca anagrafica automatica.",
-        ).strip()
+        # Non chiediamo più il nome dell'istituto nella barra laterale.
+        # Le bozze useranno segnaposto per i dati della scuola non forniti.
         contesto_scuola = (
-            f"Istituto indicato dall'utente: {nome_scuola}. "
-            if nome_scuola else
-            "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre per i dati mancanti. "
+            "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre "
+            "per i dati mancanti. "
         )
         istruzioni_istituto = (
             "Non inventare dati ufficiali della scuola e non dichiarare di averli verificati online. "
@@ -611,45 +606,36 @@ with st.sidebar:
         )
 
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
-            if not nome_scuola:
-                st.warning("Inserisci prima il nome dell'istituto.")
-            else:
-                st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_istituto} "
-                    "Un docente supplente deve prendere servizio oggi ma ha la febbre "
-                    "e non può venire fisicamente a firmare. Come devo procedere? "
-                    "Prepara anche una bozza di modulo editabile per la presa di servizio. "
-                    "Inserisci nella bozza solo i dati della scuola che hai potuto verificare; "
-                    "per quelli non verificati usa segnaposto tra parentesi quadre."
-                )
-                st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["prompt_rapido"] = (
+                f"{contesto_scuola} {istruzioni_istituto} "
+                "Un docente supplente deve prendere servizio oggi ma ha la febbre "
+                "e non può venire fisicamente a firmare. Come devo procedere? "
+                "Prepara anche una bozza di modulo editabile per la presa di servizio. "
+                "Inserisci nella bozza solo i dati della scuola che hai potuto verificare; "
+                "per quelli non verificati usa segnaposto tra parentesi quadre."
+            )
+            st.session_state["ricerca_web_azione_rapida"] = True
 
         if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
-            if not nome_scuola:
-                st.warning("Inserisci prima il nome dell'istituto.")
-            else:
-                st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_istituto} "
-                    "Un docente mi ha comunicato stamattina di essere in malattia. "
-                    "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
-                    "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
-                    "Non inventare dati specifici dell'istituto e cita le fonti web consultate."
-                )
-                st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["prompt_rapido"] = (
+                f"{contesto_scuola} {istruzioni_istituto} "
+                "Un docente mi ha comunicato stamattina di essere in malattia. "
+                "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
+                "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
+                "Non inventare dati specifici dell'istituto e cita le fonti web consultate."
+            )
+            st.session_state["ricerca_web_azione_rapida"] = True
 
         if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
-            if not nome_scuola:
-                st.warning("Inserisci prima il nome dell'istituto.")
-            else:
-                st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_istituto} "
-                    "Devo inviare una convocazione urgente per supplenza breve tramite "
-                    "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
-                    "editabile. Indica quali dati devo verificare prima dell'invio. "
-                    "Inserisci nella bozza solo dati della scuola confermati da fonti affidabili; "
-                    "usa segnaposto tra parentesi quadre per le informazioni mancanti e cita le fonti consultate."
-                )
-                st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["prompt_rapido"] = (
+                f"{contesto_scuola} {istruzioni_istituto} "
+                "Devo inviare una convocazione urgente per supplenza breve tramite "
+                "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
+                "editabile. Indica quali dati devo verificare prima dell'invio. "
+                "Inserisci nella bozza solo dati della scuola confermati da fonti affidabili; "
+                "usa segnaposto tra parentesi quadre per le informazioni mancanti e cita le fonti consultate."
+            )
+            st.session_state["ricerca_web_azione_rapida"] = True
 
         st.divider()
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
