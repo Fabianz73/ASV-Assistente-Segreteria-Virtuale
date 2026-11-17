@@ -185,6 +185,84 @@ st.markdown(
         font-size: 1.02em;
     }
 
+    /* Piccoli dettagli decorativi, discreti e non invasivi */
+    .avs-hero {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+    }
+
+    .avs-hero::after {
+        content: "✦   ·   ♡";
+        position: absolute;
+        right: 18px;
+        top: 12px;
+        color: rgba(98, 84, 143, 0.20);
+        font-size: 1.05rem;
+        letter-spacing: 7px;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    .avs-cat-chase {
+        position: absolute;
+        right: 13px;
+        bottom: 9px;
+        width: 145px;
+        height: 32px;
+        pointer-events: none;
+        user-select: none;
+        opacity: 0.88;
+    }
+
+    .avs-cat-chase .avs-mouse,
+    .avs-cat-chase .avs-cat {
+        position: absolute;
+        bottom: 0;
+        display: inline-block;
+        line-height: 1;
+        filter: saturate(0.78);
+        will-change: transform, opacity;
+    }
+
+    .avs-cat-chase .avs-mouse {
+        right: 7px;
+        font-size: 17px;
+        animation: avs-mouse-run 2.7s ease-in-out 0.15s 1 both;
+    }
+
+    .avs-cat-chase .avs-cat {
+        right: 24px;
+        font-size: 23px;
+        animation: avs-cat-run 2.7s ease-in-out 1 both;
+    }
+
+    @keyframes avs-mouse-run {
+        0%   { transform: translateX(0); opacity: 0; }
+        8%   { opacity: 0.82; }
+        55%  { transform: translateX(-100px) translateY(-2px); opacity: 0.82; }
+        76%  { transform: translateX(-118px) translateY(0); opacity: 0.7; }
+        100% { transform: translateX(-145px); opacity: 0; }
+    }
+
+    @keyframes avs-cat-run {
+        0%   { transform: translateX(0); opacity: 0; }
+        10%  { opacity: 0.9; }
+        54%  { transform: translateX(-90px) translateY(-3px); opacity: 0.9; }
+        76%  { transform: translateX(-111px) translateY(0); opacity: 0.78; }
+        100% { transform: translateX(-142px); opacity: 0; }
+    }
+
+    /* Rispetta chi preferisce ridurre le animazioni nel proprio dispositivo */
+    @media (prefers-reduced-motion: reduce) {
+        .avs-cat-chase { display: none !important; }
+        *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+        }
+    }
+
     /* Selezione radio in tonalità lavanda */
     [data-testid="stRadio"] label {
         border-radius: 10px;
@@ -195,6 +273,7 @@ st.markdown(
     }
 
     @media (max-width: 768px) {
+        .avs-cat-chase { right: 8px; bottom: 5px; transform: scale(0.82); transform-origin: bottom right; }
         h1 { font-size: 1.8rem !important; }
         [data-testid="stChatMessage"] { padding: 0.8rem; }
     }
@@ -458,23 +537,38 @@ st.title("🏫 AVS Office")
 st.caption(
     "Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria"
 )
-st.markdown(
-    """
-    <div style="
+# Mostra la piccola animazione una sola volta per sessione, così non distrae
+# quando l'utente preme pulsanti o interagisce con la chat.
+mostra_animazione_avs = not st.session_state.get("avs_animazione_mostrata", False)
+st.session_state["avs_animazione_mostrata"] = True
+
+hero_html = """
+    <div class="avs-hero" style="
         background: linear-gradient(115deg, #F0EBFA 0%, #F8F5FB 54%, #EAF4EF 100%);
         border: 1px solid #E6E0EA;
         border-radius: 18px;
-        padding: 17px 22px;
+        padding: 17px 22px 24px 22px;
         margin: 8px 0 22px 0;
     ">
       <div style="font-size: 1.08rem; font-weight: 800; color: #40384F;">
         La tua segreteria, un po’ più semplice ✨
       </div>
-      <div style="font-size: 0.92rem; color: #716B79; margin-top: 4px;">
+      <div style="font-size: 0.92rem; color: #716B79; margin-top: 4px; padding-right: 95px;">
         Procedure, risposte operative e moduli compilabili in un unico spazio.
       </div>
+      __AVS_CAT_ANIMATION__
     </div>
-    """,
+    """
+
+animazione_gatto_html = """
+      <div class="avs-cat-chase" aria-hidden="true" title="Una piccola pausa felina">
+        <span class="avs-mouse">🐭</span>
+        <span class="avs-cat">🐈</span>
+      </div>
+    """ if mostra_animazione_avs else ""
+
+st.markdown(
+    hero_html.replace("__AVS_CAT_ANIMATION__", animazione_gatto_html),
     unsafe_allow_html=True,
 )
 
@@ -499,50 +593,115 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
+        nome_scuola = st.text_input(
+            "Nome dell'istituto *",
+            key="nome_scuola_avs",
+            placeholder="Es. I.C. Alessandro Manzoni",
+            help="Scrivi il nome della scuola. AVS userà queste informazioni per cercare riferimenti pubblici, privilegiando il sito ufficiale dell'istituto.",
+        ).strip()
+        localita_scuola = st.text_input(
+            "Comune / provincia (facoltativo)",
+            key="localita_scuola_avs",
+            placeholder="Es. Roma (RM)",
+            help="Aggiungi la località se esistono scuole con nomi simili.",
+        ).strip()
+        sito_scuola = st.text_input(
+            "Sito web della scuola (facoltativo)",
+            key="sito_scuola_avs",
+            placeholder="Es. www.istituto.edu.it",
+            help="Se conosci il sito ufficiale, inseriscilo per rendere la ricerca più precisa.",
+        ).strip()
         codice_meccanografico = st.text_input(
-            "Codice meccanografico della scuola *",
-            key="codice_meccanografico_scuola",
+            "Codice meccanografico (facoltativo)",
+            key="codice_meccanografico_avs",
             placeholder="Es. RMIC000000",
-            help="Inserisci il codice del tuo istituto: verrà incluso nelle richieste avviate con le azioni rapide.",
-        ).strip().upper()
-        st.caption("Il codice è richiesto per avviare le azioni rapide.")
+            help="Puoi inserirlo per controllare che i risultati riguardino proprio la scuola corretta; non è obbligatorio.",
+        ).strip()
+        tipologia_scuola = st.selectbox(
+            "Tipologia di scuola (facoltativa)",
+            ["Non so / cerca tutte le tipologie", "Scuola statale", "Scuola paritaria", "Altra scuola non statale"],
+            key="tipologia_scuola_avs",
+        )
+        st.caption(
+            "La ricerca è pensata per scuole di tutta Italia, comprese le scuole paritarie. "
+            "Il codice meccanografico è facoltativo e serve solo come elemento di riscontro. "
+            "Verifica sempre le informazioni prima di usarle nei documenti."
+        )
 
-        if st.button("📋 Presa di servizio supplente", use_container_width=True):
-            if not codice_meccanografico:
-                st.warning("Inserisci prima il codice meccanografico della scuola.")
+        contesto_scuola = f"Nome istituto indicato dall'utente: {nome_scuola}."
+        if localita_scuola:
+            contesto_scuola += f" Località: {localita_scuola}."
+        if sito_scuola:
+            contesto_scuola += f" Sito web indicato dall'utente: {sito_scuola}."
+        if codice_meccanografico:
+            contesto_scuola += f" Codice meccanografico fornito come dato facoltativo di riscontro: {codice_meccanografico}. Usalo solo per verificare la corrispondenza, non come unico criterio di ricerca."
+        if tipologia_scuola != "Non so / cerca tutte le tipologie":
+            contesto_scuola += f" Tipologia indicata dall'utente: {tipologia_scuola}."
+        istruzioni_ricerca = (
+            "Cerca sul web l'istituto in qualsiasi regione d'Italia, includendo scuole statali, scuole paritarie "
+            "e altre scuole non statali. Usa soprattutto denominazione e località; se fornito, usa il codice "
+            "meccanografico soltanto come controllo incrociato. Privilegia il sito ufficiale dell'istituto e fonti "
+            "istituzionali attendibili, ad esempio Scuola in Chiaro/MIM e pagine ufficiali della scuola. "
+            "Restituisci una scheda anagrafica con: denominazione completa, tipologia (statale/paritaria/altro), "
+            "codice meccanografico della sede e, se reperibili, dei plessi, indirizzo completo della sede (via/piazza, "
+            "numero civico, CAP, comune e provincia), telefono, email ordinaria, PEC, sito web e nominativo del dirigente "
+            "solo se pubblicato da fonte attendibile. Per ogni dato indica la fonte e il link, distinguendo dati confermati, "
+            "dati non trovati e dati discordanti. Non inventare né completare per supposizione email, telefoni, indirizzi o codici. "
+            "Se trovi più istituti omonimi, chiedi di specificare la località invece di scegliere arbitrariamente. "
+        )
+
+        if st.button("🔎 Cerca dati della scuola", use_container_width=True):
+            if not nome_scuola.strip():
+                st.warning("Inserisci almeno il nome della scuola per avviare la ricerca.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    f"{contesto_scuola} {istruzioni_ricerca} "
+                    "Per prima cosa mostra una scheda chiara intitolata 'DATI IDENTIFICATIVI DELLA SCUOLA', "
+                    "con i campi richiesti e i link alle fonti consultate. Poi aggiungi una breve nota su quali dati "
+                    "sono confermati e quali devono essere verificati dalla segreteria. Non creare documenti in questa richiesta."
+                )
+                st.session_state["ricerca_web_azione_rapida"] = True
+
+        if st.button("📋 Presa di servizio supplente", use_container_width=True):
+            if not nome_scuola:
+                st.warning("Inserisci prima il nome dell'istituto.")
+            else:
+                st.session_state["prompt_rapido"] = (
+                    f"{contesto_scuola} {istruzioni_ricerca} "
                     "Un docente supplente deve prendere servizio oggi ma ha la febbre "
                     "e non può venire fisicamente a firmare. Come devo procedere? "
                     "Prepara anche una bozza di modulo editabile per la presa di servizio. "
-                    "Usa il codice meccanografico indicato nei riferimenti del documento, "
-                    "senza inventare altri dati dell'istituto."
+                    "Inserisci nella bozza solo i dati della scuola che hai potuto verificare; "
+                    "per quelli non verificati usa segnaposto tra parentesi quadre."
                 )
+                st.session_state["ricerca_web_azione_rapida"] = True
 
         if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
-            if not codice_meccanografico:
-                st.warning("Inserisci prima il codice meccanografico della scuola.")
+            if not nome_scuola:
+                st.warning("Inserisci prima il nome dell'istituto.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    f"{contesto_scuola} {istruzioni_ricerca} "
                     "Un docente mi ha comunicato stamattina di essere in malattia. "
                     "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
                     "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
-                    "Non inventare altri dati dell'istituto."
+                    "Non inventare dati specifici dell'istituto e cita le fonti web consultate."
                 )
+                st.session_state["ricerca_web_azione_rapida"] = True
 
         if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
-            if not codice_meccanografico:
-                st.warning("Inserisci prima il codice meccanografico della scuola.")
+            if not nome_scuola:
+                st.warning("Inserisci prima il nome dell'istituto.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"Contesto istituto: codice meccanografico {codice_meccanografico}. "
+                    f"{contesto_scuola} {istruzioni_ricerca} "
                     "Devo inviare una convocazione urgente per supplenza breve tramite "
                     "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
-                    "editabile. Indica quali dati devo verificare prima dell'invio e inserisci "
-                    "il codice meccanografico fornito senza inventare altri dati dell'istituto."
+                    "editabile. Indica quali dati devo verificare prima dell'invio. "
+                    "Inserisci nella bozza solo dati della scuola confermati da fonti affidabili; "
+                    "usa segnaposto tra parentesi quadre per le informazioni mancanti e cita le fonti consultate."
                 )
+                st.session_state["ricerca_web_azione_rapida"] = True
 
         st.divider()
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
@@ -720,8 +879,10 @@ else:
 
     domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
 
+    ricerca_web_azione_rapida = False
     if "prompt_rapido" in st.session_state:
         domanda = st.session_state.pop("prompt_rapido")
+        ricerca_web_azione_rapida = st.session_state.pop("ricerca_web_azione_rapida", False)
 
     if domanda:
         st.session_state["messaggi"].append({"role": "user", "content": domanda})
@@ -751,14 +912,24 @@ else:
                             }
                         )
 
+                    # Nelle azioni rapide abilita la ricerca web di Gemini, così il contesto
+                    # della scuola viene verificato online usando nome/località/sito, non il codice.
+                    strumenti_ricerca = (
+                        [types.Tool(google_search=types.GoogleSearch())]
+                        if ricerca_web_azione_rapida
+                        else None
+                    )
+                    configurazione = types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.2,
+                        max_output_tokens=1400 if ricerca_web_azione_rapida else 900,
+                        tools=strumenti_ricerca,
+                    )
+
                     risposta = client.models.generate_content(
                         model=MODEL_NAME,
                         contents=contenuti,
-                        config=types.GenerateContentConfig(
-                            system_instruction=SYSTEM_PROMPT,
-                            temperature=0.2,
-                            max_output_tokens=900,
-                        ),
+                        config=configurazione,
                     )
 
                     testo_risposta = (risposta.text or "").strip()
