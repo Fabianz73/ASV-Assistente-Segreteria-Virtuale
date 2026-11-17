@@ -593,42 +593,60 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
-        nome_scuola = st.text_input(
-            "Nome dell'istituto *",
-            key="nome_scuola_avs",
-            placeholder="Es. I.C. Alessandro Manzoni",
-            help="Scrivi il nome della scuola. AVS userà queste informazioni per cercare riferimenti pubblici, privilegiando il sito ufficiale dell'istituto.",
-        ).strip()
-        localita_scuola = st.text_input(
-            "Comune / provincia (facoltativo)",
-            key="localita_scuola_avs",
-            placeholder="Es. Roma (RM)",
-            help="Aggiungi la località se esistono scuole con nomi simili.",
-        ).strip()
-        sito_scuola = st.text_input(
-            "Sito web della scuola (facoltativo)",
-            key="sito_scuola_avs",
-            placeholder="Es. www.istituto.edu.it",
-            help="Se conosci il sito ufficiale, inseriscilo per rendere la ricerca più precisa.",
-        ).strip()
-        codice_meccanografico = st.text_input(
-            "Codice meccanografico (facoltativo)",
-            key="codice_meccanografico_avs",
-            placeholder="Es. RMIC000000",
-            help="Puoi inserirlo per controllare che i risultati riguardino proprio la scuola corretta; non è obbligatorio.",
-        ).strip()
-        tipologia_scuola = st.selectbox(
-            "Tipologia di scuola (facoltativa)",
-            ["Non so / cerca tutte le tipologie", "Scuola statale", "Scuola paritaria", "Altra scuola non statale"],
-            key="tipologia_scuola_avs",
-        )
-        st.caption(
-            "La ricerca è pensata per scuole di tutta Italia, comprese le scuole paritarie. "
-            "Il codice meccanografico è facoltativo e serve solo come elemento di riscontro. "
-            "Verifica sempre le informazioni prima di usarle nei documenti."
-        )
+        if "mostra_ricerca_scuola_avs" not in st.session_state:
+            st.session_state["mostra_ricerca_scuola_avs"] = False
 
-        contesto_scuola = f"Nome istituto indicato dall'utente: {nome_scuola}."
+        if st.button(
+            "🏫 Ricerca codice Meccanografico scolastico",
+            use_container_width=True,
+            help="Apri le opzioni per identificare una scuola e cercarne i dati ufficiali.",
+        ):
+            st.session_state["mostra_ricerca_scuola_avs"] = not st.session_state["mostra_ricerca_scuola_avs"]
+            st.rerun()
+
+        if st.session_state["mostra_ricerca_scuola_avs"]:
+            st.markdown("#### 🔎 Opzioni di ricerca della scuola")
+            nome_scuola = st.text_input(
+                "Nome dell'istituto *",
+                key="nome_scuola_avs",
+                placeholder="Es. I.C. Alessandro Manzoni",
+                help="Scrivi il nome della scuola. AVS cercherà riferimenti pubblici, privilegiando il sito ufficiale.",
+            ).strip()
+            localita_scuola = st.text_input(
+                "Comune / provincia (facoltativo)",
+                key="localita_scuola_avs",
+                placeholder="Es. Roma (RM)",
+                help="Aggiungi la località se esistono scuole con nomi simili.",
+            ).strip()
+            sito_scuola = st.text_input(
+                "Sito web della scuola (facoltativo)",
+                key="sito_scuola_avs",
+                placeholder="Es. www.istituto.edu.it",
+            ).strip()
+            codice_meccanografico = st.text_input(
+                "Codice meccanografico (facoltativo)",
+                key="codice_meccanografico_avs",
+                placeholder="Es. RMIC000000",
+                help="Facoltativo: serve come controllo incrociato, non è necessario per cercare per nome.",
+            ).strip().upper()
+            tipologia_scuola = st.selectbox(
+                "Tipologia di scuola (facoltativa)",
+                ["Non so / cerca tutte le tipologie", "Scuola statale", "Scuola paritaria", "Altra scuola non statale"],
+                key="tipologia_scuola_avs",
+            )
+            st.caption(
+                "Ricerca per scuole di tutta Italia, comprese le paritarie. "
+                "Controlla sempre le fonti prima di usare i dati nei documenti."
+            )
+
+        # Le informazioni inserite restano disponibili anche quando le opzioni sono richiuse.
+        nome_scuola = st.session_state.get("nome_scuola_avs", "").strip()
+        localita_scuola = st.session_state.get("localita_scuola_avs", "").strip()
+        sito_scuola = st.session_state.get("sito_scuola_avs", "").strip()
+        codice_meccanografico = st.session_state.get("codice_meccanografico_avs", "").strip().upper()
+        tipologia_scuola = st.session_state.get("tipologia_scuola_avs", "Non so / cerca tutte le tipologie")
+
+        contesto_scuola = f"Nome istituto indicato dall'utente: {nome_scuola or 'non specificato'} ."
         if localita_scuola:
             contesto_scuola += f" Località: {localita_scuola}."
         if sito_scuola:
@@ -643,15 +661,16 @@ with st.sidebar:
             "meccanografico soltanto come controllo incrociato. Privilegia il sito ufficiale dell'istituto e fonti "
             "istituzionali attendibili, ad esempio Scuola in Chiaro/MIM e pagine ufficiali della scuola. "
             "Restituisci una scheda anagrafica con: denominazione completa, tipologia (statale/paritaria/altro), "
-            "codice meccanografico della sede e, se reperibili, dei plessi, indirizzo completo della sede (via/piazza, "
-            "numero civico, CAP, comune e provincia), telefono, email ordinaria, PEC, sito web e nominativo del dirigente "
-            "solo se pubblicato da fonte attendibile. Per ogni dato indica la fonte e il link, distinguendo dati confermati, "
-            "dati non trovati e dati discordanti. Non inventare né completare per supposizione email, telefoni, indirizzi o codici. "
-            "Se trovi più istituti omonimi, chiedi di specificare la località invece di scegliere arbitrariamente. "
+            "codice meccanografico della sede e, se reperibili, quelli dei plessi, indirizzo completo della sede, "
+            "telefono, email ordinaria, PEC, sito web e nominativo del dirigente solo se pubblicato da fonte attendibile. "
+            "Per ogni dato indica la fonte e il link; distingui dati confermati, non trovati e discordanti. "
+            "Non inventare dati. Se trovi più istituti omonimi, chiedi di specificare la località. "
         )
 
-        if st.button("🔎 Cerca dati della scuola", use_container_width=True):
-            if not nome_scuola.strip():
+        if st.session_state["mostra_ricerca_scuola_avs"] and st.button(
+            "🔎 Cerca dati della scuola", use_container_width=True
+        ):
+            if not nome_scuola:
                 st.warning("Inserisci almeno il nome della scuola per avviare la ricerca.")
             else:
                 st.session_state["prompt_rapido"] = (
