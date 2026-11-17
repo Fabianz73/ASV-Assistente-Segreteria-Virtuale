@@ -19,7 +19,7 @@ st.set_page_config(
     layout="wide",
 )
 
-MODEL_NAME = "gemini-3.5-flash-lite"
+MODEL_NAME = "gemini-2.5-flash-lite"
 
 
 @st.cache_resource
@@ -884,3 +884,4 @@ else:
                         "Controlla la chiave API, la connessione e il nome del modello."
                     )
                     st.code(str(exc))
+
