@@ -593,100 +593,29 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
-        if "mostra_ricerca_scuola_avs" not in st.session_state:
-            st.session_state["mostra_ricerca_scuola_avs"] = False
-
-        if st.button(
-            "🏫 Ricerca codice Meccanografico scolastico",
-            use_container_width=True,
-            help="Apri le opzioni per identificare una scuola e cercarne i dati ufficiali.",
-        ):
-            st.session_state["mostra_ricerca_scuola_avs"] = not st.session_state["mostra_ricerca_scuola_avs"]
-            st.rerun()
-
-        if st.session_state["mostra_ricerca_scuola_avs"]:
-            st.markdown("#### 🔎 Opzioni di ricerca della scuola")
-            nome_scuola = st.text_input(
-                "Nome dell'istituto *",
-                key="nome_scuola_avs",
-                placeholder="Es. I.C. Alessandro Manzoni",
-                help="Scrivi il nome della scuola. AVS cercherà riferimenti pubblici, privilegiando il sito ufficiale.",
-            ).strip()
-            localita_scuola = st.text_input(
-                "Comune / provincia (facoltativo)",
-                key="localita_scuola_avs",
-                placeholder="Es. Roma (RM)",
-                help="Aggiungi la località se esistono scuole con nomi simili.",
-            ).strip()
-            sito_scuola = st.text_input(
-                "Sito web della scuola (facoltativo)",
-                key="sito_scuola_avs",
-                placeholder="Es. www.istituto.edu.it",
-            ).strip()
-            codice_meccanografico = st.text_input(
-                "Codice meccanografico (facoltativo)",
-                key="codice_meccanografico_avs",
-                placeholder="Es. RMIC000000",
-                help="Facoltativo: serve come controllo incrociato, non è necessario per cercare per nome.",
-            ).strip().upper()
-            tipologia_scuola = st.selectbox(
-                "Tipologia di scuola (facoltativa)",
-                ["Non so / cerca tutte le tipologie", "Scuola statale", "Scuola paritaria", "Altra scuola non statale"],
-                key="tipologia_scuola_avs",
-            )
-            st.caption(
-                "Ricerca per scuole di tutta Italia, comprese le paritarie. "
-                "Controlla sempre le fonti prima di usare i dati nei documenti."
-            )
-
-        # Le informazioni inserite restano disponibili anche quando le opzioni sono richiuse.
-        nome_scuola = st.session_state.get("nome_scuola_avs", "").strip()
-        localita_scuola = st.session_state.get("localita_scuola_avs", "").strip()
-        sito_scuola = st.session_state.get("sito_scuola_avs", "").strip()
-        codice_meccanografico = st.session_state.get("codice_meccanografico_avs", "").strip().upper()
-        tipologia_scuola = st.session_state.get("tipologia_scuola_avs", "Non so / cerca tutte le tipologie")
-
-        contesto_scuola = f"Nome istituto indicato dall'utente: {nome_scuola or 'non specificato'} ."
-        if localita_scuola:
-            contesto_scuola += f" Località: {localita_scuola}."
-        if sito_scuola:
-            contesto_scuola += f" Sito web indicato dall'utente: {sito_scuola}."
-        if codice_meccanografico:
-            contesto_scuola += f" Codice meccanografico fornito come dato facoltativo di riscontro: {codice_meccanografico}. Usalo solo per verificare la corrispondenza, non come unico criterio di ricerca."
-        if tipologia_scuola != "Non so / cerca tutte le tipologie":
-            contesto_scuola += f" Tipologia indicata dall'utente: {tipologia_scuola}."
-        istruzioni_ricerca = (
-            "Cerca sul web l'istituto in qualsiasi regione d'Italia, includendo scuole statali, scuole paritarie "
-            "e altre scuole non statali. Usa soprattutto denominazione e località; se fornito, usa il codice "
-            "meccanografico soltanto come controllo incrociato. Privilegia il sito ufficiale dell'istituto e fonti "
-            "istituzionali attendibili, ad esempio Scuola in Chiaro/MIM e pagine ufficiali della scuola. "
-            "Restituisci una scheda anagrafica con: denominazione completa, tipologia (statale/paritaria/altro), "
-            "codice meccanografico della sede e, se reperibili, quelli dei plessi, indirizzo completo della sede, "
-            "telefono, email ordinaria, PEC, sito web e nominativo del dirigente solo se pubblicato da fonte attendibile. "
-            "Per ogni dato indica la fonte e il link; distingui dati confermati, non trovati e discordanti. "
-            "Non inventare dati. Se trovi più istituti omonimi, chiedi di specificare la località. "
+        nome_scuola = st.text_input(
+            "Nome dell’istituto (facoltativo)",
+            key="nome_scuola_avs",
+            placeholder="Es. I.C. Alessandro Manzoni",
+            help="Puoi indicare la scuola per personalizzare le bozze. Non viene eseguita una ricerca anagrafica automatica.",
+        ).strip()
+        contesto_scuola = (
+            f"Istituto indicato dall'utente: {nome_scuola}. "
+            if nome_scuola else
+            "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre per i dati mancanti. "
         )
-
-        if st.session_state["mostra_ricerca_scuola_avs"] and st.button(
-            "🔎 Cerca dati della scuola", use_container_width=True
-        ):
-            if not nome_scuola:
-                st.warning("Inserisci almeno il nome della scuola per avviare la ricerca.")
-            else:
-                st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_ricerca} "
-                    "Per prima cosa mostra una scheda chiara intitolata 'DATI IDENTIFICATIVI DELLA SCUOLA', "
-                    "con i campi richiesti e i link alle fonti consultate. Poi aggiungi una breve nota su quali dati "
-                    "sono confermati e quali devono essere verificati dalla segreteria. Non creare documenti in questa richiesta."
-                )
-                st.session_state["ricerca_web_azione_rapida"] = True
+        istruzioni_istituto = (
+            "Non inventare dati ufficiali della scuola e non dichiarare di averli verificati online. "
+            "Per ogni dato dell'istituto non fornito dall'utente, usa un segnaposto tra parentesi quadre "
+            "e indica cosa va verificato prima dell'uso. "
+        )
 
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
             if not nome_scuola:
                 st.warning("Inserisci prima il nome dell'istituto.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_ricerca} "
+                    f"{contesto_scuola} {istruzioni_istituto} "
                     "Un docente supplente deve prendere servizio oggi ma ha la febbre "
                     "e non può venire fisicamente a firmare. Come devo procedere? "
                     "Prepara anche una bozza di modulo editabile per la presa di servizio. "
@@ -700,7 +629,7 @@ with st.sidebar:
                 st.warning("Inserisci prima il nome dell'istituto.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_ricerca} "
+                    f"{contesto_scuola} {istruzioni_istituto} "
                     "Un docente mi ha comunicato stamattina di essere in malattia. "
                     "Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, "
                     "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
@@ -713,7 +642,7 @@ with st.sidebar:
                 st.warning("Inserisci prima il nome dell'istituto.")
             else:
                 st.session_state["prompt_rapido"] = (
-                    f"{contesto_scuola} {istruzioni_ricerca} "
+                    f"{contesto_scuola} {istruzioni_istituto} "
                     "Devo inviare una convocazione urgente per supplenza breve tramite "
                     "interpello. Prepara una mail formale e una bozza di modulo di accettazione "
                     "editabile. Indica quali dati devo verificare prima dell'invio. "
