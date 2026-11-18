@@ -428,24 +428,32 @@ elif strumento == "Cerca codici meccanografici":
             else:
                 st.success(f"Trovate {len(scuole)} scuole.")
                 
-                # Visualizzazione a fisarmonica con link per il telefono
+                # Raggruppa i risultati per comune
+                scuole_per_comune = {}
                 for s in scuole:
-                    codice = s.get("CODICESCUOLA", "")
-                    denominazione = s.get("DENOMINAZIONESCUOLA", "")
-                    comune = s.get("DESCRIZIONECOMUNE", "")
-                    provincia = s.get("PROVINCIA", "")
-                    email = s.get("INDIRIZZOEMAILSCUOLA", "")
-                    pec = s.get("INDIRIZZOPECSCUOLA", "")
-                    
-                    with st.expander(f"{denominazione} ({codice}) - {comune} ({provincia})"):
-                        st.write(f"**Indirizzo:** {s.get('INDIRIZZOSCUOLA', '')}")
-                        st.write(f"**Email:** {email}")
-                        st.write(f"**PEC:** {pec}")
+                    comune = s.get("DESCRIZIONECOMUNE", "Comune sconosciuto")
+                    if comune not in scuole_per_comune:
+                        scuole_per_comune[comune] = []
+                    scuole_per_comune[comune].append(s)
+                
+                # Ordina i comuni in ordine alfabetico
+                for comune in sorted(scuole_per_comune.keys()):
+                    st.markdown(f"### 📍 {comune}")
+                    for s in scuole_per_comune[comune]:
+                        codice = s.get("CODICESCUOLA", "")
+                        denominazione = s.get("DENOMINAZIONESCUOLA", "")
+                        provincia = s.get("PROVINCIA", "")
+                        email = s.get("INDIRIZZOEMAILSCUOLA", "")
+                        pec = s.get("INDIRIZZOPECSCUOLA", "")
                         
-                        # Link a Scuola in Chiaro per trovare il telefono
-                        url_scuola = f"https://cercalatuascuola.istruzione.it/cercalatuascuola/istituti/{codice}/"
-                        st.markdown(f"[🔍 Cerca il numero di telefono su Scuola in Chiaro]({url_scuola})")
-                        st.caption("Il numero di telefono non è presente nei file CSV, ma puoi trovarlo nella scheda ufficiale della scuola.")
+                        with st.expander(f"{denominazione} ({codice}) - {provincia}"):
+                            st.write(f"**Indirizzo:** {s.get('INDIRIZZOSCUOLA', '')}")
+                            st.write(f"**Email:** {email}")
+                            st.write(f"**PEC:** {pec}")
+                            
+                            url_scuola = f"https://cercalatuascuola.istruzione.it/cercalatuascuola/istituti/{codice}/"
+                            st.markdown(f"[🔍 Cerca il numero di telefono su Scuola in Chiaro]({url_scuola})")
+                            st.caption("Il numero di telefono non è presente nei file CSV, ma puoi trovarlo nella scheda ufficiale della scuola.")
                 
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
 else:
