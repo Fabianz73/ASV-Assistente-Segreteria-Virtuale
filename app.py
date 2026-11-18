@@ -1,6 +1,7 @@
 import hashlib, io, re, unicodedata
 from urllib.parse import quote_plus
 import pandas as pd
+import requests
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -217,7 +218,7 @@ def carica_dati_scuole():
     return df_totale
 
 def cerca_scuole(query, regione=None, solo_paritarie=False):
-    """Cerca scuole nei dati locali."""
+    """Cerca scuole nei dati locali e recupera il telefono dall'API."""
     df = carica_dati_scuole()
     if df is None:
         return [], "Impossibile caricare i dati delle scuole."
@@ -235,6 +236,28 @@ def cerca_scuole(query, regione=None, solo_paritarie=False):
     
     df = df.head(50)
     risultati = df.to_dict('records')
+    
+    # Arricchisci con il telefono tramite API (solo per i risultati mostrati)
+    for s in risultati:
+        codice = s.get("CODICESCUOLA", "")
+        if codice:
+            try:
+                url = "https://unica.istruzione.gov.it/services/sic/api/v1.0/ricerche/ricercaAvanzata"
+                params = {"codMecc": codice, "numeroElementiPagina": 1}
+                r = requests.get(url, params=params, timeout=3)
+                if r.status_code == 200:
+                    data = r.json()
+                    scuole_api = data.get("scuole", [])
+                    if scuole_api:
+                        telefono = scuole_api[0].get("telefono", "")
+                        s["Telefono"] = telefono if telefono else "Non disponibile"
+                    else:
+                        s["Telefono"] = "Non disponibile"
+                else:
+                    s["Telefono"] = "Non disponibile"
+            except Exception:
+                s["Telefono"] = "Non disponibile"
+    
     return risultati, None
 
 def formatta_e_mostra(testo, indice_msg):
@@ -449,13 +472,10 @@ elif strumento == "Cerca codici meccanografici":
                         
                         with st.expander(f"{denominazione} ({codice}) - {indirizzo}, {comune} ({provincia})"):
                             st.write(f"**Indirizzo:** {indirizzo}")
+                            st.write(f"**Telefono:** {s.get('Telefono', 'Non disponibile')}")
                             st.write(f"**Email:** {email}")
                             st.write(f"**PEC:** {pec}")
                             
-                            url_scuola = f"https://unica.istruzione.gov.it/portale/it/web/guest/scuola-in-chiaro?search={codice}"
-                            st.markdown(f"[🔍 Apri la scheda ufficiale su Unica (per il telefono)]({url_scuola})")
-                            st.caption("Il numero di telefono non è presente nei file CSV, ma puoi trovarlo nella scheda ufficiale della scuola.")
-                
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
