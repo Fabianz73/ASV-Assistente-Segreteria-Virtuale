@@ -7,6 +7,7 @@ from google.genai import types
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+import os
 
 st.set_page_config(page_title="AVS - Assistente Virtuale Scolastico", page_icon="🏫", layout="wide")
 MODEL_NAME = "gemini-3.5-flash-lite"
@@ -187,19 +188,33 @@ def crea_pdf_editabile(testo_modulo):
 
 @st.cache_data
 def carica_dati_scuole():
-    """Carica i dati delle scuole dal file CSV salvato nel repository."""
-    file_path = "SCUANAGRAFEPAR20262720260901.csv"
-    try:
+    """Carica e unisce i dati delle scuole statali e paritarie dai file CSV."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    file_statali = os.path.join(script_dir, "SCUANAGRAFESTAT20262720260901.csv")
+    file_paritarie = os.path.join(script_dir, "SCUANAGRAFEPAR20262720260901.csv")
+    
+    dfs = []
+    for file_path in [file_statali, file_paritarie]:
+        if not os.path.exists(file_path):
+            continue
         try:
-            df = pd.read_csv(file_path, encoding='latin-1', sep=',')
-            if len(df.columns) == 1:
-                raise ValueError
-        except:
-            df = pd.read_csv(file_path, encoding='latin-1', sep=';')
-        return df
-    except Exception as e:
-        st.error(f"Errore nel caricamento del file {file_path}: {e}")
+            try:
+                df = pd.read_csv(file_path, encoding='latin-1', sep=',')
+                if len(df.columns) == 1:
+                    raise ValueError
+            except:
+                df = pd.read_csv(file_path, encoding='latin-1', sep=';')
+            dfs.append(df)
+        except Exception as e:
+            st.warning(f"Impossibile leggere {file_path}: {e}")
+            
+    if not dfs:
+        st.error("Nessun file CSV trovato. Carica i file su GitHub.")
         return None
+        
+    df_totale = pd.concat(dfs, ignore_index=True)
+    return df_totale
 
 def cerca_scuole(query, regione=None, solo_paritarie=False):
     """Cerca scuole nei dati locali."""
@@ -388,9 +403,9 @@ elif strumento == "Cerca codici meccanografici":
     with col1:
         query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
     with col2:
-        regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "NO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "TO", "Trentino Alto Adige": "TN", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
+        regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "MO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "TO", "Trentino Alto Adige": "TN", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
-        solo_paritarie = st.checkbox("Solo scuole paritarie", value=True)
+        solo_paritarie = st.checkbox("Solo scuole paritarie", value=False)
     if st.button("🔎 Cerca", use_container_width=True):
         if not query_scuola.strip() and regione_sel == "Tutte" and not solo_paritarie:
             st.warning("Inserisci almeno un criterio di ricerca.")
