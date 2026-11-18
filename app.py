@@ -189,7 +189,7 @@ def cerca_scuole(query, regione=None, solo_paritarie=False):
     base_url = "https://unica.istruzione.gov.it/services/sic/api/v1.0/ricerche/ricercaAvanzata"
     params = {"numeroElementiPagina": 50, "numeroPagina": 1}
     if query:
-        params["search"] = query
+        params["denominazione"] = query.strip()
     if regione:
         params["regione"] = regione
     try:
@@ -364,17 +364,17 @@ Regole:
         st.caption("Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, soprattutto su smartphone. Prova il file prima di distribuirlo.")
 elif strumento == "Cerca codici meccanografici":
     st.subheader("🔍 Cerca codici meccanografici")
-    st.write("Cerca per nome scuola, codice meccanografico o comune. I dati provengono da Scuola in Chiaro (scuole statali e paritarie).")
+    st.write("Cerca per nome scuola o comune. I dati provengono da Scuola in Chiaro (scuole statali e paritarie).")
     col1, col2 = st.columns(2)
     with col1:
-        query_scuola = st.text_input("Nome scuola, codice o comune", placeholder="Es. Manzoni, RMIC8GH00R, Roma")
+        query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
     with col2:
         regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "NO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "IO", "Trentino Alto Adige": "IR", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
         solo_paritarie = st.checkbox("Solo scuole paritarie")
     if st.button("🔎 Cerca", use_container_width=True):
         if not query_scuola.strip() and regione_sel == "Tutte" and not solo_paritarie:
-            st.warning("Inserisci almeno un criterio di ricerca (nome, codice, regione o spunta 'Solo paritarie').")
+            st.warning("Inserisci almeno un criterio di ricerca (nome, regione o spunta 'Solo paritarie').")
         else:
             with st.spinner("Ricerca in corso..."):
                 scuole, errore = cerca_scuole(query_scuola.strip(), regioni.get(regione_sel), solo_paritarie)
@@ -382,7 +382,7 @@ elif strumento == "Cerca codici meccanografici":
                 st.error(f"Errore nella ricerca: {errore}")
                 st.caption("L'API di Scuola in Chiaro potrebbe essere temporaneamente non raggiungibile.")
             elif not scuole:
-                st.info("Nessuna scuola trovata. Prova con un nome più generico o un codice diverso.")
+                st.info("Nessuna scuola trovata. Prova con un nome più generico o un comune diverso.")
             else:
                 st.success(f"Trovate {len(scuole)} scuole.")
                 righe = []
