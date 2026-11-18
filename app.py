@@ -452,8 +452,8 @@ elif strumento == "Cerca codici meccanografici":
                             st.write(f"**Email:** {email}")
                             st.write(f"**PEC:** {pec}")
                             
-                            url_scuola = f"https://cercalatuascuola.istruzione.it/cercalatuascuola/istituti/{codice}/"
-                            st.markdown(f"[🔍 Cerca il numero di telefono su Scuola in Chiaro]({url_scuola})")
+                            url_scuola = f"https://unica.istruzione.gov.it/portale/it/web/guest/scuola-in-chiaro?search={codice}"
+                            st.markdown(f"[🔍 Apri la scheda ufficiale su Unica (per il telefono)]({url_scuola})")
                             st.caption("Il numero di telefono non è presente nei file CSV, ma puoi trovarlo nella scheda ufficiale della scuola.")
                 
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
