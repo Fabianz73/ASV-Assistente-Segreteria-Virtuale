@@ -614,7 +614,7 @@ with st.sidebar:
                 "Inserisci nella bozza solo i dati della scuola che hai potuto verificare; "
                 "per quelli non verificati usa segnaposto tra parentesi quadre."
             )
-            st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["ricerca_web_azione_rapida"] = False
 
         if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
             st.session_state["prompt_rapido"] = (
@@ -624,7 +624,7 @@ with st.sidebar:
                 "distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. "
                 "Non inventare dati specifici dell'istituto e cita le fonti web consultate."
             )
-            st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["ricerca_web_azione_rapida"] = False
 
         if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
             st.session_state["prompt_rapido"] = (
@@ -635,7 +635,7 @@ with st.sidebar:
                 "Inserisci nella bozza solo dati della scuola confermati da fonti affidabili; "
                 "usa segnaposto tra parentesi quadre per le informazioni mancanti e cita le fonti consultate."
             )
-            st.session_state["ricerca_web_azione_rapida"] = True
+            st.session_state["ricerca_web_azione_rapida"] = False
 
         st.divider()
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
@@ -828,6 +828,4 @@ else:
             with st.spinner("Sto preparando la risposta..."):
                 try:
                     api_key = get_api_key()
-                    if not api_key:
-                        raise ValueError(
-                            "Chiave API man
+                    if not
