@@ -1,6 +1,6 @@
+import hashlib
 import io
 import re
-import textwrap
 import unicodedata
 from urllib.parse import quote_plus
 
@@ -26,6 +26,15 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 def get_gemini_client(api_key):
     """Riutilizza il client Gemini invece di ricrearlo a ogni richiesta."""
     return genai.Client(api_key=api_key)
+
+
+def get_api_key():
+    """Legge la chiave API in modo sicuro, senza sollevare eccezioni."""
+    try:
+        return st.secrets["GEMINI_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        return None
+
 
 st.markdown(
     """
@@ -91,7 +100,6 @@ st.markdown(
         line-height: 1.6;
     }
 
-    /* Pulsanti: morbidi, ma con contrasto sufficiente */
     .stButton > button, .stDownloadButton > button, .stLinkButton > a,
     [data-testid="stFormSubmitButton"] button {
         border-radius: 13px;
@@ -125,7 +133,6 @@ st.markdown(
         color: #FFFFFF;
     }
 
-    /* Campi di testo chiari e arrotondati */
     .stTextInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"],
     .stMultiSelect [data-baseweb="select"] {
         border-radius: 12px;
@@ -185,7 +192,6 @@ st.markdown(
         font-size: 1.02em;
     }
 
-    /* Piccoli dettagli decorativi, discreti e non invasivi */
     .avs-hero {
         position: relative;
         overflow: hidden;
@@ -253,7 +259,6 @@ st.markdown(
         100% { transform: translateX(-142px); opacity: 0; }
     }
 
-    /* Rispetta chi preferisce ridurre le animazioni nel proprio dispositivo */
     @media (prefers-reduced-motion: reduce) {
         .avs-cat-chase { display: none !important; }
         *, *::before, *::after {
@@ -263,7 +268,6 @@ st.markdown(
         }
     }
 
-    /* Selezione radio in tonalità lavanda */
     [data-testid="stRadio"] label {
         border-radius: 10px;
     }
@@ -332,8 +336,7 @@ def crea_pdf_editabile(testo_modulo):
     margine_sinistro = 50
     margine_destro = 50
     larghezza_testo = larghezza - margine_sinistro - margine_destro
-    y_iniziale = altezza - 82
-    y = y_iniziale
+    y = altezza - 82
     numero_campo = 0
 
     def intestazione():
@@ -424,22 +427,19 @@ def crea_pdf_editabile(testo_modulo):
 
                 etichetta = parte[1:-1].strip() or "Campo"
                 pdf.setFont("Helvetica", 9)
-                etichetta_visuale = f"{etichetta}:"
-                pdf.drawString(margine_sinistro, y, etichetta_visuale)
+                pdf.drawString(margine_sinistro, y, f"{etichetta}:")
                 y -= 19
                 if y < 75:
                     nuova_pagina()
 
                 numero_campo += 1
-                larghezza_campo = larghezza_testo
-                altezza_campo = 20
                 pdf.acroForm.textfield(
                     name=nome_campo_sicuro(etichetta, numero_campo),
                     tooltip=etichetta,
                     x=margine_sinistro,
                     y=y - 3,
-                    width=larghezza_campo,
-                    height=altezza_campo,
+                    width=larghezza_testo,
+                    height=20,
                     borderStyle="underlined",
                     borderWidth=1,
                     borderColor=colors.darkblue,
@@ -520,8 +520,6 @@ def formatta_e_mostra(testo, indice_msg):
 
         try:
             pdf_bytes = crea_pdf_editabile(testo_modulo)
-            # Usa un hash del contenuto per un nome file stabile e univoco
-            import hashlib
             file_hash = hashlib.md5(testo_modulo.encode()).hexdigest()[:8]
             st.download_button(
                 label="📥 Scarica PDF compilabile",
@@ -542,6 +540,7 @@ st.title("🏫 AVS Office")
 st.caption(
     "Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria"
 )
+
 mostra_animazione_avs = not st.session_state.get("avs_animazione_mostrata", False)
 st.session_state["avs_animazione_mostrata"] = True
 
@@ -718,8 +717,7 @@ if strumento == "Crea modulo PDF compilabile":
         if not scopo.strip():
             st.warning("Descrivi brevemente lo scopo del modulo prima di generare la bozza.")
         else:
-            # Gestione sicura di st.secrets
-            api_key = st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None
+            api_key = get_api_key()
             if not api_key:
                 st.error(
                     "Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud."
@@ -754,4 +752,83 @@ Regole:
                             config=types.GenerateContentConfig(
                                 system_instruction=(
                                     "Sei AVS, assistente per le segreterie scolastiche italiane. "
-                                    "Genera bozze prudenti, chiare e pratiche
+                                    "Genera bozze prudenti, chiare e pratiche. Non inventare "
+                                    "norme o dichiarare ufficiale un modello generato."
+                                ),
+                                temperature=0.2,
+                                max_output_tokens=1200,
+                            ),
+                        )
+                    testo_generato = (risposta_modulo.text or "").strip()
+                    if not testo_generato:
+                        st.error("Non è arrivato testo. Riprova con una descrizione più precisa.")
+                    else:
+                        st.session_state["modulo_testo_editabile"] = testo_generato
+                        st.session_state["modulo_guidato_pronto"] = True
+                except Exception as exc:
+                    st.error(
+                        "Non è stato possibile generare la bozza. Controlla la connessione "
+                        "e la configurazione di Gemini."
+                    )
+                    st.code(str(exc))
+
+    if st.session_state["modulo_guidato_pronto"] or st.session_state["modulo_testo_editabile"]:
+        st.divider()
+        st.subheader("2. Controlla e correggi la bozza")
+        st.info(
+            "Controlla il testo e i riferimenti prima dell'uso. Le parole tra parentesi quadre "
+            "diventeranno campi compilabili nel PDF."
+        )
+        testo_modulo_finale = st.text_area(
+            "Testo del modulo (puoi modificarlo prima di generare il PDF)",
+            key="editor_modulo",
+            value=st.session_state["modulo_testo_editabile"],
+            height=380,
+        )
+        if testo_modulo_finale.strip():
+            try:
+                pdf_bytes = crea_pdf_editabile(testo_modulo_finale)
+                st.download_button(
+                    label="📥 Scarica PDF compilabile",
+                    data=pdf_bytes,
+                    file_name="AVS_modulo_compilabile.pdf",
+                    mime="application/pdf",
+                    key="download_pdf_guidato",
+                    use_container_width=True,
+                )
+            except Exception as exc:
+                st.error(f"Non è stato possibile generare il PDF: {exc}")
+        st.caption(
+            "Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, "
+            "soprattutto su smartphone. Prova il file prima di distribuirlo."
+        )
+
+else:
+    for idx, messaggio in enumerate(st.session_state["messaggi"]):
+        with st.chat_message(messaggio["role"]):
+            if messaggio["role"] == "assistant":
+                formatta_e_mostra(messaggio["content"], idx)
+            else:
+                st.markdown(messaggio["content"])
+
+    domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
+
+    ricerca_web_azione_rapida = False
+    if "prompt_rapido" in st.session_state:
+        domanda = st.session_state.pop("prompt_rapido")
+        ricerca_web_azione_rapida = st.session_state.pop("ricerca_web_azione_rapida", False)
+
+    if domanda:
+        st.session_state["messaggi"].append({"role": "user", "content": domanda})
+
+        with st.chat_message("user"):
+            st.markdown(domanda)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Sto preparando la risposta..."):
+                try:
+                    api_key = get_api_key()
+                    if not api_key:
+                        raise ValueError(
+                            "Chiave API man
+                            
