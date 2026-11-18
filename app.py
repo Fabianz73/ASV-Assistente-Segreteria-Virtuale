@@ -427,18 +427,26 @@ elif strumento == "Cerca codici meccanografici":
                 st.info("Nessuna scuola trovata.")
             else:
                 st.success(f"Trovate {len(scuole)} scuole.")
-                righe = []
+                
+                # Visualizzazione a fisarmonica con link per il telefono
                 for s in scuole:
-                    righe.append({
-                        "Codice": s.get("CODICESCUOLA", ""),
-                        "Denominazione": s.get("DENOMINAZIONESCUOLA", ""),
-                        "Indirizzo": s.get("INDIRIZZOSCUOLA", ""),
-                        "Comune": s.get("DESCRIZIONECOMUNE", ""),
-                        "Provincia": s.get("PROVINCIA", ""),
-                        "Email": s.get("INDIRIZZOEMAILSCUOLA", ""),
-                        "PEC": s.get("INDIRIZZOPECSCUOLA", ""),
-                    })
-                st.dataframe(righe, use_container_width=True, hide_index=True)
+                    codice = s.get("CODICESCUOLA", "")
+                    denominazione = s.get("DENOMINAZIONESCUOLA", "")
+                    comune = s.get("DESCRIZIONECOMUNE", "")
+                    provincia = s.get("PROVINCIA", "")
+                    email = s.get("INDIRIZZOEMAILSCUOLA", "")
+                    pec = s.get("INDIRIZZOPECSCUOLA", "")
+                    
+                    with st.expander(f"{denominazione} ({codice}) - {comune} ({provincia})"):
+                        st.write(f"**Indirizzo:** {s.get('INDIRIZZOSCUOLA', '')}")
+                        st.write(f"**Email:** {email}")
+                        st.write(f"**PEC:** {pec}")
+                        
+                        # Link a Scuola in Chiaro per trovare il telefono
+                        url_scuola = f"https://cercalatuascuola.istruzione.it/cercalatuascuola/istituti/{codice}/"
+                        st.markdown(f"[🔍 Cerca il numero di telefono su Scuola in Chiaro]({url_scuola})")
+                        st.caption("Il numero di telefono non è presente nei file CSV, ma puoi trovarlo nella scheda ufficiale della scuola.")
+                
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
