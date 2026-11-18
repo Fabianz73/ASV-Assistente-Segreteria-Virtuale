@@ -293,6 +293,7 @@ ACCURATEZZA:
   le fonti ufficiali: MIM (mim.gov.it), Normattiva (normattiva.it), Gazzetta Ufficiale
   (gazzettaufficiale.it) e ARAN (aranagenzia.it).
 - Distingui gli obblighi normativi dalle prassi che possono variare da scuola a scuola.
+- Se l'utente chiede informazioni su una scuola specifica, chiedi nome e località prima di rispondere.
 
 FORMATO:
 - Parti dalla risposta concreta, senza introduzioni o saluti.
@@ -322,6 +323,9 @@ def nome_campo_sicuro(testo, indice):
 
 def crea_pdf_editabile(testo_modulo):
     """Genera un PDF A4 con campi interattivi per i segnaposto [CAMPO]."""
+    if not testo_modulo or not testo_modulo.strip():
+        raise ValueError("Il testo del modulo è vuoto.")
+
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     larghezza, altezza = A4
@@ -352,6 +356,29 @@ def crea_pdf_editabile(testo_modulo):
         pdf.showPage()
         intestazione()
         y = altezza - 72
+
+    def disegna_testo_wrappato(testo, font="Helvetica", dimensione=10):
+        nonlocal y
+        parole = testo.split()
+        linea_local = ""
+        for parola in parole:
+            candidata = f"{linea_local} {parola}".strip()
+            if pdf.stringWidth(candidata, font, dimensione) <= larghezza_testo:
+                linea_local = candidata
+            else:
+                if linea_local:
+                    pdf.setFont(font, dimensione)
+                    pdf.drawString(margine_sinistro, y, linea_local)
+                    y -= 15
+                    if y < 65:
+                        nuova_pagina()
+                linea_local = parola
+        if linea_local:
+            pdf.setFont(font, dimensione)
+            pdf.drawString(margine_sinistro, y, linea_local)
+            y -= 17
+            if y < 65:
+                nuova_pagina()
 
     intestazione()
     righe = testo_modulo.strip().splitlines()
@@ -385,33 +412,9 @@ def crea_pdf_editabile(testo_modulo):
                 y -= 26
             continue
 
-        # Per rendere il modulo leggibile, ogni segnaposto ha una riga dedicata.
         parti = re.split(r"(\[[^\]]+\])", riga)
         pdf.setFont("Helvetica", 10)
         testo_corrente = ""
-
-        def disegna_testo_wrappato(testo, font="Helvetica", dimensione=10):
-            nonlocal y
-            parole = testo.split()
-            linea_local = ""
-            for parola in parole:
-                candidata = f"{linea_local} {parola}".strip()
-                if pdf.stringWidth(candidata, font, dimensione) <= larghezza_testo:
-                    linea_local = candidata
-                else:
-                    if linea_local:
-                        pdf.setFont(font, dimensione)
-                        pdf.drawString(margine_sinistro, y, linea_local)
-                        y -= 15
-                        if y < 65:
-                            nuova_pagina()
-                    linea_local = parola
-            if linea_local:
-                pdf.setFont(font, dimensione)
-                pdf.drawString(margine_sinistro, y, linea_local)
-                y -= 17
-                if y < 65:
-                    nuova_pagina()
 
         for parte in parti:
             if parte.startswith("[") and parte.endswith("]"):
@@ -420,7 +423,6 @@ def crea_pdf_editabile(testo_modulo):
                     testo_corrente = ""
 
                 etichetta = parte[1:-1].strip() or "Campo"
-                # Etichetta e campo sono separati: evita di oltrepassare i margini.
                 pdf.setFont("Helvetica", 9)
                 etichetta_visuale = f"{etichetta}:"
                 pdf.drawString(margine_sinistro, y, etichetta_visuale)
@@ -518,12 +520,15 @@ def formatta_e_mostra(testo, indice_msg):
 
         try:
             pdf_bytes = crea_pdf_editabile(testo_modulo)
+            # Usa un hash del contenuto per un nome file stabile e univoco
+            import hashlib
+            file_hash = hashlib.md5(testo_modulo.encode()).hexdigest()[:8]
             st.download_button(
                 label="📥 Scarica PDF compilabile",
                 data=pdf_bytes,
-                file_name=f"Modulo_Segreteria_{indice_msg}.pdf",
+                file_name=f"Modulo_Segreteria_{file_hash}.pdf",
                 mime="application/pdf",
-                key=f"btn_pdf_{indice_msg}",
+                key=f"btn_pdf_{file_hash}",
             )
         except Exception as exc:
             st.error(f"Non è stato possibile generare il PDF: {exc}")
@@ -537,8 +542,6 @@ st.title("🏫 AVS Office")
 st.caption(
     "Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria"
 )
-# Mostra la piccola animazione una sola volta per sessione, così non distrae
-# quando l'utente preme pulsanti o interagisce con la chat.
 mostra_animazione_avs = not st.session_state.get("avs_animazione_mostrata", False)
 st.session_state["avs_animazione_mostrata"] = True
 
@@ -593,8 +596,6 @@ with st.sidebar:
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
 
-        # Non chiediamo più il nome dell'istituto nella barra laterale.
-        # Le bozze useranno segnaposto per i dati della scuola non forniti.
         contesto_scuola = (
             "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre "
             "per i dati mancanti. "
@@ -717,7 +718,8 @@ if strumento == "Crea modulo PDF compilabile":
         if not scopo.strip():
             st.warning("Descrivi brevemente lo scopo del modulo prima di generare la bozza.")
         else:
-            api_key = st.secrets.get("GEMINI_API_KEY")
+            # Gestione sicura di st.secrets
+            api_key = st.secrets["GEMINI_API_KEY"] if "GEMINI_API_KEY" in st.secrets else None
             if not api_key:
                 st.error(
                     "Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud."
@@ -752,136 +754,4 @@ Regole:
                             config=types.GenerateContentConfig(
                                 system_instruction=(
                                     "Sei AVS, assistente per le segreterie scolastiche italiane. "
-                                    "Genera bozze prudenti, chiare e pratiche. Non inventare "
-                                    "norme o dichiarare ufficiale un modello generato."
-                                ),
-                                temperature=0.2,
-                                max_output_tokens=1200,
-                            ),
-                        )
-                    testo_generato = (risposta_modulo.text or "").strip()
-                    if not testo_generato:
-                        st.error("Non è arrivato testo. Riprova con una descrizione più precisa.")
-                    else:
-                        st.session_state["modulo_testo_editabile"] = testo_generato
-                        st.session_state["modulo_guidato_pronto"] = True
-                except Exception as exc:
-                    st.error(
-                        "Non è stato possibile generare la bozza. Controlla la connessione "
-                        "e la configurazione di Gemini."
-                    )
-                    st.code(str(exc))
-
-    if st.session_state["modulo_guidato_pronto"] or st.session_state["modulo_testo_editabile"]:
-        st.divider()
-        st.subheader("2. Controlla e correggi la bozza")
-        st.info(
-            "Controlla il testo e i riferimenti prima dell'uso. Le parole tra parentesi quadre "
-            "diventeranno campi compilabili nel PDF."
-        )
-        testo_modulo_finale = st.text_area(
-            "Testo del modulo (puoi modificarlo prima di generare il PDF)",
-            key="modulo_testo_editabile",
-            height=380,
-        )
-        if testo_modulo_finale.strip():
-            try:
-                pdf_bytes = crea_pdf_editabile(testo_modulo_finale)
-                st.download_button(
-                    label="📥 Scarica PDF compilabile",
-                    data=pdf_bytes,
-                    file_name="AVS_modulo_compilabile.pdf",
-                    mime="application/pdf",
-                    key="download_pdf_guidato",
-                    use_container_width=True,
-                )
-            except Exception as exc:
-                st.error(f"Non è stato possibile generare il PDF: {exc}")
-        st.caption(
-            "Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, "
-            "soprattutto su smartphone. Prova il file prima di distribuirlo."
-        )
-
-else:
-    # Mostra la cronologia della sessione.
-    for idx, messaggio in enumerate(st.session_state["messaggi"]):
-        with st.chat_message(messaggio["role"]):
-            if messaggio["role"] == "assistant":
-                formatta_e_mostra(messaggio["content"], idx)
-            else:
-                st.markdown(messaggio["content"])
-
-    domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
-
-    ricerca_web_azione_rapida = False
-    if "prompt_rapido" in st.session_state:
-        domanda = st.session_state.pop("prompt_rapido")
-        ricerca_web_azione_rapida = st.session_state.pop("ricerca_web_azione_rapida", False)
-
-    if domanda:
-        st.session_state["messaggi"].append({"role": "user", "content": domanda})
-
-        with st.chat_message("user"):
-            st.markdown(domanda)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Sto preparando la risposta..."):
-                try:
-                    api_key = st.secrets.get("GEMINI_API_KEY")
-                    if not api_key:
-                        raise ValueError(
-                            "Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud."
-                        )
-
-                    client = get_gemini_client(api_key)
-
-                    contenuti = []
-                    # Invia solo gli ultimi 4 messaggi per mantenere le risposte rapide.
-                    for messaggio in st.session_state["messaggi"][-4:]:
-                        ruolo = "model" if messaggio["role"] == "assistant" else "user"
-                        contenuti.append(
-                            {
-                                "role": ruolo,
-                                "parts": [{"text": messaggio["content"]}],
-                            }
-                        )
-
-                    # Nelle azioni rapide abilita la ricerca web di Gemini, così il contesto
-                    # della scuola viene verificato online usando nome/località/sito, non il codice.
-                    strumenti_ricerca = (
-                        [types.Tool(google_search=types.GoogleSearch())]
-                        if ricerca_web_azione_rapida
-                        else None
-                    )
-                    configurazione = types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        temperature=0.2,
-                        max_output_tokens=1400 if ricerca_web_azione_rapida else 900,
-                        tools=strumenti_ricerca,
-                    )
-
-                    risposta = client.models.generate_content(
-                        model=MODEL_NAME,
-                        contents=contenuti,
-                        config=configurazione,
-                    )
-
-                    testo_risposta = (risposta.text or "").strip()
-                    if not testo_risposta:
-                        testo_risposta = (
-                            "Non è arrivato testo nella risposta del modello. "
-                            "Riprova con una domanda più specifica."
-                        )
-
-                    formatta_e_mostra(testo_risposta, len(st.session_state["messaggi"]))
-                    st.session_state["messaggi"].append(
-                        {"role": "assistant", "content": testo_risposta}
-                    )
-
-                except Exception as exc:
-                    st.error(
-                        "Si è verificato un problema durante la richiesta a Gemini. "
-                        "Controlla la chiave API, la connessione e il nome del modello."
-                    )
-                    st.code(str(exc))
-
+                                    "Genera bozze prudenti, chiare e pratiche
