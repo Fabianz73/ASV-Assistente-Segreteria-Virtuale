@@ -428,4 +428,5 @@ else:
                     formatta_e_mostra(testo_risposta, len(st.session_state["messaggi"]))
                     st.session_state["messaggi"].append({"role": "assistant", "content": testo_risposta})
                 except Exception as exc:
-                    st.error("Si è verific
+                    st.error("Si è verificato un problema durante la richiesta a Gemini. Controlla la chiave API, la connessione e il nome del modello.")
+                    st.code(str(exc))
