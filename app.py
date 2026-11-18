@@ -227,7 +227,7 @@ def cerca_scuole(query, regione=None, solo_paritarie=False):
         df = df[maschera_nome]
     
     if regione:
-        maschera_regione = df['REGIONE'].astype(str).str.contains(regione, case=False, na=False)
+        maschera_regione = df['REGIONE'].astype(str).str.upper() == regione.upper()
         df = df[maschera_regione]
     
     if solo_paritarie:
@@ -403,7 +403,16 @@ elif strumento == "Cerca codici meccanografici":
     with col1:
         query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
     with col2:
-        regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "MO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "TO", "Trentino Alto Adige": "TN", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
+        regioni = {
+            "Tutte": None, 
+            "ABRUZZO": "ABRUZZO", "BASILICATA": "BASILICATA", "CALABRIA": "CALABRIA", 
+            "CAMPANIA": "CAMPANIA", "EMILIA ROMAGNA": "EMILIA ROMAGNA", 
+            "FRIULI-VENEZIA G.": "FRIULI-VENEZIA G.", "LAZIO": "LAZIO", "LIGURIA": "LIGURIA", 
+            "LOMBARDIA": "LOMBARDIA", "MARCHE": "MARCHE", "MOLISE": "MOLISE", 
+            "PIEMONTE": "PIEMONTE", "PUGLIA": "PUGLIA", "SARDEGNA": "SARDEGNA", 
+            "SICILIA": "SICILIA", "TOSCANA": "TOSCANA", "TRENTINO ALTO ADIGE": "TRENTINO ALTO ADIGE", 
+            "UMBRIA": "UMBRIA", "VALLE D'AOSTA": "VALLE D'AOSTA", "VENETO": "VENETO"
+        }
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
         solo_paritarie = st.checkbox("Solo scuole paritarie", value=False)
     if st.button("🔎 Cerca", use_container_width=True):
