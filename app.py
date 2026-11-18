@@ -188,16 +188,14 @@ def crea_pdf_editabile(testo_modulo):
 @st.cache_data
 def carica_dati_scuole():
     """Carica i dati delle scuole dal file CSV salvato nel repository."""
-    # 👇 INCOLLA QUI IL NOME ESATTO DEL TUO FILE CSV
-    file_path = "NOME_ESATTO_DEL_TUO_FILE.csv" 
-    
+    file_path = "SCUANAGRAFEPAR20262720260901.csv"
     try:
         try:
-            df = pd.read_csv(file_path, encoding='latin-1', sep=';')
+            df = pd.read_csv(file_path, encoding='latin-1', sep=',')
             if len(df.columns) == 1:
                 raise ValueError
         except:
-            df = pd.read_csv(file_path, encoding='latin-1', sep=',')
+            df = pd.read_csv(file_path, encoding='latin-1', sep=';')
         return df
     except Exception as e:
         st.error(f"Errore nel caricamento del file {file_path}: {e}")
@@ -210,19 +208,15 @@ def cerca_scuole(query, regione=None, solo_paritarie=False):
         return [], "Impossibile caricare i dati delle scuole."
     
     if query:
-        colonna_nome = 'DenominazioneScuola' if 'DenominazioneScuola' in df.columns else df.columns[1]
-        maschera_nome = df[colonna_nome].astype(str).str.contains(query, case=False, na=False)
+        maschera_nome = df['DENOMINAZIONESCUOLA'].astype(str).str.contains(query, case=False, na=False)
         df = df[maschera_nome]
     
     if regione:
-        colonna_regione = 'Regione' if 'Regione' in df.columns else None
-        if colonna_regione:
-            maschera_regione = df[colonna_regione].astype(str).str.contains(regione, case=False, na=False)
-            df = df[maschera_regione]
+        maschera_regione = df['REGIONE'].astype(str).str.contains(regione, case=False, na=False)
+        df = df[maschera_regione]
     
     if solo_paritarie:
-        if 'TipoScuola' in df.columns:
-            df = df[df['TipoScuola'].astype(str).str.contains('Paritaria', case=False, na=False)]
+        df = df[df['DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA'].astype(str).str.contains('NON STATALE', case=False, na=False)]
     
     df = df.head(50)
     risultati = df.to_dict('records')
@@ -394,9 +388,9 @@ elif strumento == "Cerca codici meccanografici":
     with col1:
         query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
     with col2:
-        regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "NO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "IO", "Trentino Alto Adige": "IR", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
+        regioni = {"Tutte": None, "Abruzzo": "AB", "Basilicata": "BA", "Calabria": "CL", "Campania": "CA", "Emilia Romagna": "EM", "Friuli Venezia Giulia": "FR", "Lazio": "LA", "Liguria": "LI", "Lombardia": "LO", "Marche": "MA", "Molise": "NO", "Piemonte": "PI", "Puglia": "PU", "Sardegna": "SA", "Sicilia": "SI", "Toscana": "TO", "Trentino Alto Adige": "TN", "Umbria": "UM", "Valle d'Aosta": "VA", "Veneto": "VE"}
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
-        solo_paritarie = st.checkbox("Solo scuole paritarie")
+        solo_paritarie = st.checkbox("Solo scuole paritarie", value=True)
     if st.button("🔎 Cerca", use_container_width=True):
         if not query_scuola.strip() and regione_sel == "Tutte" and not solo_paritarie:
             st.warning("Inserisci almeno un criterio di ricerca.")
@@ -412,13 +406,13 @@ elif strumento == "Cerca codici meccanografici":
                 righe = []
                 for s in scuole:
                     righe.append({
-                        "Codice": s.get("CodiceScuola", s.get("Codice", "")),
-                        "Denominazione": s.get("DenominazioneScuola", s.get("Denominazione", "")),
-                        "Indirizzo": s.get("IndirizzoScuola", s.get("Indirizzo", "")),
-                        "Comune": s.get("Comune", ""),
-                        "Provincia": s.get("Provincia", ""),
-                        "Telefono": s.get("Telefono", ""),
-                        "Email": s.get("Email", ""),
+                        "Codice": s.get("CODICESCUOLA", ""),
+                        "Denominazione": s.get("DENOMINAZIONESCUOLA", ""),
+                        "Indirizzo": s.get("INDIRIZZOSCUOLA", ""),
+                        "Comune": s.get("DESCRIZIONECOMUNE", ""),
+                        "Provincia": s.get("PROVINCIA", ""),
+                        "Email": s.get("INDIRIZZOEMAILSCUOLA", ""),
+                        "PEC": s.get("INDIRIZZOPECSCUOLA", ""),
                     })
                 st.dataframe(righe, use_container_width=True, hide_index=True)
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
