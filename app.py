@@ -1,5 +1,6 @@
 import hashlib, io, re, unicodedata
 from urllib.parse import quote_plus
+import pandas as pd
 import requests
 import streamlit as st
 from google import genai
@@ -185,23 +186,55 @@ def crea_pdf_editabile(testo_modulo):
     buffer.seek(0)
     return buffer.getvalue()
 
+@st.cache_data
+def carica_dati_scuole():
+    """Scarica e memorizza i dati delle scuole paritarie e statali dai CSV del Ministero."""
+    # SOSTITUISCI QUESTI URL CON I LINK REALI DEI FILE CSV SCARICATI DA dati.istruzione.it
+    url_paritarie = "https://dati.istruzione.it/opendata/opendata/SCUOLE_PARITARIE.csv"
+    url_statali = "https://dati.istruzione.it/opendata/opendata/SCUOLE_STATALI.csv"
+    
+    dfs = []
+    for url in [url_paritarie, url_statali]:
+        try:
+            df = pd.read_csv(url, encoding='latin-1', sep=';')
+            dfs.append(df)
+        except Exception:
+            continue
+    
+    if not dfs:
+        return None
+    
+    df_totale = pd.concat(dfs, ignore_index=True)
+    return df_totale
+
 def cerca_scuole(query, regione=None, solo_paritarie=False):
-    base_url = "https://unica.istruzione.gov.it/services/sic/api/v1.0/ricerche/ricercaAvanzata"
-    params = {"numeroElementiPagina": 50, "numeroPagina": 1}
+    """Cerca scuole nei dati locali (CSV del Ministero)."""
+    df = carica_dati_scuole()
+    if df is None:
+        return [], "Impossibile caricare i dati delle scuole. Verifica gli URL dei file CSV o riprova più tardi."
+    
+    # Filtra per nome (ricerca case-insensitive) - Adatta 'Denominazione' al nome reale della colonna
     if query:
-        params["denominazione"] = query.strip()
+        colonna_nome = 'Denominazione' if 'Denominazione' in df.columns else df.columns[1]
+        maschera_nome = df[colonna_nome].astype(str).str.contains(query, case=False, na=False)
+        df = df[maschera_nome]
+    
+    # Filtra per regione - Adatta 'Regione' al nome reale della colonna
     if regione:
-        params["regione"] = regione
-    try:
-        r = requests.get(base_url, params=params, timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        scuole = data.get("scuole", [])
-        if solo_paritarie:
-            scuole = [s for s in scuole if s.get("scuolaParitaria") == "1"]
-        return scuole, None
-    except Exception as e:
-        return [], str(e)
+        colonna_regione = 'Regione' if 'Regione' in df.columns else None
+        if colonna_regione:
+            maschera_regione = df[colonna_regione].astype(str).str.contains(regione, case=False, na=False)
+            df = df[maschera_regione]
+    
+    # Filtra per paritarie - Adatta 'Tipo' al nome reale della colonna
+    if solo_paritarie:
+        colonna_tipo = 'Tipo' if 'Tipo' in df.columns else None
+        if colonna_tipo:
+            df = df[df[colonna_tipo].astype(str).str.contains('Paritaria', case=False, na=False)]
+    
+    df = df.head(50)
+    risultati = df.to_dict('records')
+    return risultati, None
 
 def formatta_e_mostra(testo, indice_msg):
     testo_pulito = testo or ""
@@ -364,7 +397,7 @@ Regole:
         st.caption("Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, soprattutto su smartphone. Prova il file prima di distribuirlo.")
 elif strumento == "Cerca codici meccanografici":
     st.subheader("🔍 Cerca codici meccanografici")
-    st.write("Cerca per nome scuola o comune. I dati provengono da Scuola in Chiaro (scuole statali e paritarie).")
+    st.write("Cerca per nome scuola o comune. I dati provengono dai dataset ufficiali del Ministero (scuole statali e paritarie).")
     col1, col2 = st.columns(2)
     with col1:
         query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
@@ -380,17 +413,25 @@ elif strumento == "Cerca codici meccanografici":
                 scuole, errore = cerca_scuole(query_scuola.strip(), regioni.get(regione_sel), solo_paritarie)
             if errore:
                 st.error(f"Errore nella ricerca: {errore}")
-                st.caption("L'API di Scuola in Chiaro potrebbe essere temporaneamente non raggiungibile.")
             elif not scuole:
                 st.info("Nessuna scuola trovata. Prova con un nome più generico o un comune diverso.")
             else:
                 st.success(f"Trovate {len(scuole)} scuole.")
                 righe = []
                 for s in scuole:
-                    tipo = "Paritaria" if s.get("scuolaParitaria") == "1" else "Statale"
-                    righe.append({"Codice": s.get("codiceDebole", ""), "Denominazione": s.get("denominazione", ""), "Tipo": tipo, "Indirizzo": s.get("indirizzo", ""), "Comune": s.get("comune", ""), "Provincia": s.get("provincia", ""), "Telefono": s.get("telefono", ""), "Email": s.get("email", "")})
+                    tipo = "Paritaria" if "Paritaria" in str(s.get("Tipo", "")) else "Statale"
+                    righe.append({
+                        "Codice": s.get("Codice", s.get("codiceDebole", "")),
+                        "Denominazione": s.get("Denominazione", s.get("denominazione", "")),
+                        "Tipo": tipo,
+                        "Indirizzo": s.get("Indirizzo", s.get("indirizzo", "")),
+                        "Comune": s.get("Comune", s.get("comune", "")),
+                        "Provincia": s.get("Provincia", s.get("provincia", "")),
+                        "Telefono": s.get("Telefono", s.get("telefono", "")),
+                        "Email": s.get("Email", s.get("email", "")),
+                    })
                 st.dataframe(righe, use_container_width=True, hide_index=True)
-                st.caption("Fonte: Scuola in Chiaro (Ministero dell'Istruzione e del Merito). I dati sono aggiornati annualmente. Verifica sempre sul sito ufficiale prima di usarli per comunicazioni formali.")
+                st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito. I dati sono aggiornati periodicamente. Verifica sempre sul sito ufficiale prima di usarli per comunicazioni formali.")
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
         with st.chat_message(messaggio["role"]):
