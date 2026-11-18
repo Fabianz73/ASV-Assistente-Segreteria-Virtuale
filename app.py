@@ -445,9 +445,10 @@ elif strumento == "Cerca codici meccanografici":
                         provincia = s.get("PROVINCIA", "")
                         email = s.get("INDIRIZZOEMAILSCUOLA", "")
                         pec = s.get("INDIRIZZOPECSCUOLA", "")
+                        indirizzo = s.get("INDIRIZZOSCUOLA", "")
                         
-                        with st.expander(f"{denominazione} ({codice}) - {provincia}"):
-                            st.write(f"**Indirizzo:** {s.get('INDIRIZZOSCUOLA', '')}")
+                        with st.expander(f"{denominazione} ({codice}) - {indirizzo}, {comune} ({provincia})"):
+                            st.write(f"**Indirizzo:** {indirizzo}")
                             st.write(f"**Email:** {email}")
                             st.write(f"**PEC:** {pec}")
                             
