@@ -58,13 +58,8 @@ st.markdown(
         color: var(--avs-ink);
     }
 
-    [data-testid="stAppViewContainer"] {
-        background: var(--avs-cream);
-    }
-
-    [data-testid="stHeader"] {
-        background: rgba(251, 249, 246, 0.92);
-    }
+    [data-testid="stAppViewContainer"] { background: var(--avs-cream); }
+    [data-testid="stHeader"] { background: rgba(251, 249, 246, 0.92); }
 
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #F3EFFA 0%, #F8F6F3 58%, #EEF5F0 100%);
@@ -87,18 +82,9 @@ st.markdown(
     }
 
     h1 { line-height: 1.18; }
-    p, label, li, .stMarkdown, .stCaption {
-        font-family: 'Nunito Sans', sans-serif;
-    }
-
-    [data-testid="stCaptionContainer"] p {
-        color: var(--avs-muted);
-        font-size: 0.94rem;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        line-height: 1.6;
-    }
+    p, label, li, .stMarkdown, .stCaption { font-family: 'Nunito Sans', sans-serif; }
+    [data-testid="stCaptionContainer"] p { color: var(--avs-muted); font-size: 0.94rem; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { line-height: 1.6; }
 
     .stButton > button, .stDownloadButton > button, .stLinkButton > a,
     [data-testid="stFormSubmitButton"] button {
@@ -120,15 +106,13 @@ st.markdown(
         transform: translateY(-1px);
     }
 
-    [data-testid="stFormSubmitButton"] button,
-    .stDownloadButton > button {
+    [data-testid="stFormSubmitButton"] button, .stDownloadButton > button {
         background: var(--avs-lavender);
         border-color: var(--avs-lavender);
         color: #FFFFFF;
     }
 
-    [data-testid="stFormSubmitButton"] button:hover,
-    .stDownloadButton > button:hover {
+    [data-testid="stFormSubmitButton"] button:hover, .stDownloadButton > button:hover {
         background: var(--avs-lavender-dark);
         color: #FFFFFF;
     }
@@ -166,9 +150,7 @@ st.markdown(
         background: rgba(255, 255, 255, 0.78);
     }
 
-    [data-testid="stAlert"] {
-        border-radius: 14px;
-    }
+    [data-testid="stAlert"] { border-radius: 14px; }
 
     .trappola-box {
         background-color: #FFF0ED;
@@ -192,11 +174,7 @@ st.markdown(
         font-size: 1.02em;
     }
 
-    .avs-hero {
-        position: relative;
-        overflow: hidden;
-        isolation: isolate;
-    }
+    .avs-hero { position: relative; overflow: hidden; isolation: isolate; }
 
     .avs-hero::after {
         content: "✦   ·   ♡";
@@ -268,13 +246,8 @@ st.markdown(
         }
     }
 
-    [data-testid="stRadio"] label {
-        border-radius: 10px;
-    }
-
-    hr {
-        border-color: var(--avs-border);
-    }
+    [data-testid="stRadio"] label { border-radius: 10px; }
+    hr { border-color: var(--avs-border); }
 
     @media (max-width: 768px) {
         .avs-cat-chase { right: 8px; bottom: 5px; transform: scale(0.82); transform-origin: bottom right; }
@@ -461,9 +434,7 @@ def crea_pdf_editabile(testo_modulo):
     pdf.save()
     buffer.seek(0)
     return buffer.getvalue()
-
-
-# -------------------- RENDER DELLA RISPOSTA --------------------
+    # -------------------- RENDER DELLA RISPOSTA --------------------
 def formatta_e_mostra(testo, indice_msg):
     testo_pulito = testo or ""
 
@@ -813,19 +784,6 @@ else:
 
     domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
 
-    ricerca_web_azione_rapida = False
     if "prompt_rapido" in st.session_state:
         domanda = st.session_state.pop("prompt_rapido")
-        ricerca_web_azione_rapida = st.session_state.pop("ricerca_web_azione_rapida", False)
-
-    if domanda:
-        st.session_state["messaggi"].append({"role": "user", "content": domanda})
-
-        with st.chat_message("user"):
-            st.markdown(domanda)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Sto preparando la risposta..."):
-                try:
-                    api_key = get_api_key()
-                    if not
+        st.session_state
