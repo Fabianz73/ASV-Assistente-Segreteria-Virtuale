@@ -194,35 +194,83 @@ def cerca_scuole_nei_csv(righe, nome_scuola, regione, massimo=12):
 
 
 def mostra_schede_scuole(risultati):
-    """Mostra i dati realmente presenti nei CSV; non completa né inventa i campi mancanti."""
-    for i, scuola in enumerate(risultati, 1):
+    """Mostra risultati in schede leggibili, raggruppate per comune, con sito cliccabile."""
+    gruppi = {}
+    for scuola in risultati:
+        comune = (scuola.get("comune") or "Comune non indicato").strip()
+        provincia = (scuola.get("provincia") or "").strip()
+        gruppi.setdefault((comune, provincia), []).append(scuola)
+
+    for (comune, provincia), scuole in sorted(
+        gruppi.items(), key=lambda item: (item[0][0].casefold(), item[0][1].casefold())
+    ):
+        titolo_comune = comune + (f" ({provincia})" if provincia else "")
         with st.container(border=True):
-            st.markdown(f"### 🏫 {scuola['denominazione']}")
-            if scuola["codice"]:
-                st.markdown(f"**Codice meccanografico:** `{scuola['codice']}`")
-            else:
-                st.warning("Codice meccanografico non presente nella riga del CSV.")
-            if scuola["tipo"]:
-                st.write(f"**Tipologia:** {scuola['tipo']}")
-            indirizzo = scuola["indirizzo"]
-            if scuola["cap"]:
-                indirizzo = f"{indirizzo}, {scuola['cap']}" if indirizzo else scuola["cap"]
-            if scuola["comune"]:
-                indirizzo = f"{indirizzo} · {scuola['comune']}" if indirizzo else scuola["comune"]
-            if scuola["provincia"]:
-                indirizzo = f"{indirizzo} ({scuola['provincia']})" if indirizzo else scuola["provincia"]
-            st.write(f"**Indirizzo:** {indirizzo or 'Non presente nel CSV'}")
-            st.write(f"**Telefono:** {scuola['telefono'] or 'Non presente nel CSV'}")
-            st.write(f"**Email:** {scuola['email'] or 'Non presente nel CSV'}")
-            st.write(f"**PEC:** {scuola['pec'] or 'Non presente nel CSV'}")
-            sito = scuola["sito"].strip()
-            if sito:
-                if not sito.startswith(("http://", "https://")):
-                    sito = "https://" + sito
-                st.markdown(f"**Sito web:** [{sito}]({sito})")
-            else:
-                st.write("**Sito web:** Non presente nel CSV")
-            st.caption(f"Fonte: {scuola['origine']} · Anagrafica scolastica 2026/2027. I campi mancanti non sono stati dedotti.")
+            st.markdown(
+                f"<div style='padding:2px 0 8px 0'>"
+                f"<span style='font-size:1.18rem;font-weight:800;color:#62548F'>📍 {titolo_comune}</span> "
+                f"<span style='color:#77727F;font-size:.9rem'>· {len(scuole)} {'scuola' if len(scuole) == 1 else 'scuole'}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            # Due schede per riga quando possibile: si consultano più risultati senza allungare troppo la pagina.
+            for indice in range(0, len(scuole), 2):
+                colonne = st.columns(2, gap="medium")
+                for colonna, scuola in zip(colonne, scuole[indice:indice + 2]):
+                    with colonna:
+                        with st.container(border=True):
+                            st.markdown(f"**🏫 {scuola['denominazione']}**")
+                            if scuola.get("tipo"):
+                                st.caption(scuola["tipo"])
+                            if scuola.get("codice"):
+                                st.markdown(
+                                    "<div style='font-size:.78rem;color:#77727F;margin-top:5px'>CODICE MECCANOGRAFICO</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                st.code(scuola["codice"], language=None)
+                            else:
+                                st.caption("Codice meccanografico non presente nel CSV")
+
+                            sito = (scuola.get("sito") or "").strip()
+                            if sito:
+                                if not sito.startswith(("http://", "https://")):
+                                    sito = "https://" + sito.lstrip("/")
+                                if re.match(r"^https?://[^\s]+$", sito, flags=re.IGNORECASE):
+                                    st.link_button("🌐 Apri il sito della scuola", sito, use_container_width=True)
+                                else:
+                                    st.caption("Indirizzo del sito non valido nel CSV")
+                            else:
+                                st.caption("🌐 Sito web non presente nell'archivio")
+
+                            with st.expander("📋 Indirizzo e contatti"):
+                                indirizzo = (scuola.get("indirizzo") or "").strip()
+                                cap = (scuola.get("cap") or "").strip()
+                                if cap:
+                                    indirizzo = f"{indirizzo}, {cap}" if indirizzo else cap
+                                if comune != "Comune non indicato":
+                                    indirizzo = f"{indirizzo} · {comune}" if indirizzo else comune
+                                if provincia:
+                                    indirizzo = f"{indirizzo} ({provincia})" if indirizzo else provincia
+                                st.write(f"**Indirizzo:** {indirizzo or 'Non presente nel CSV'}")
+                                telefono = (scuola.get("telefono") or "").strip()
+                                email = (scuola.get("email") or "").strip()
+                                pec = (scuola.get("pec") or "").strip()
+                                if telefono:
+                                    st.markdown(f"**Telefono:** [{telefono}](tel:{telefono})")
+                                else:
+                                    st.write("**Telefono:** Non presente nel CSV")
+                                if email:
+                                    st.markdown(f"**Email:** [{email}](mailto:{email})")
+                                else:
+                                    st.write("**Email:** Non presente nel CSV")
+                                if pec:
+                                    st.markdown(f"**PEC:** [{pec}](mailto:{pec})")
+                                else:
+                                    st.write("**PEC:** Non presente nel CSV")
+                                st.caption(
+                                    f"Fonte: {scuola.get('origine', 'archivio CSV')} · Anagrafica scolastica 2026/2027. "
+                                    "I campi mancanti non sono stati dedotti."
+                                )
 
 
 @st.cache_resource
@@ -919,12 +967,9 @@ with st.sidebar:
 
 
 if st.session_state.get("pagina_ricerca_scuola", False):
-    st.subheader("🔎 Richiesta codice meccanografico scolastico")
-    st.write(
-        "Inserisci il nome della scuola e la regione: AVS cercherà il codice meccanografico, "
-        "l'indirizzo, il telefono, l'email e il sito ufficiale cliccabile."
-    )
-    if st.button("← Torna all'assistente segreteria"):
+    st.markdown("## 🔎 Ricerca codice meccanografico")
+    st.caption("Cerca negli archivi scolastici 2026/2027. I risultati sono raggruppati per comune.")
+    if st.button("← Torna all'assistente segreteria", key="torna_da_ricerca_scuola"):
         st.session_state["pagina_ricerca_scuola"] = False
         st.rerun()
 
@@ -934,20 +979,27 @@ if st.session_state.get("pagina_ricerca_scuola", False):
         "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana",
         "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto",
     ]
-    with st.form("form_ricerca_dati_scuola"):
-        nome_scuola_ricerca = st.text_input(
-            "Nome della scuola *",
-            placeholder="Es. Istituto Comprensivo Alessandro Manzoni",
-        ).strip()
-        regione_scuola_ricerca = st.selectbox(
-            "Regione di appartenenza *",
-            regioni_italia,
-            index=None,
-            placeholder="Seleziona la regione",
-        )
-        avvia_ricerca_scuola = st.form_submit_button(
-            "🔎 Cerca codice e contatti", use_container_width=True
-        )
+    with st.container(border=True):
+        with st.form("form_ricerca_dati_scuola"):
+            col_nome, col_regione = st.columns([2, 1], gap="medium")
+            with col_nome:
+                nome_scuola_ricerca = st.text_input(
+                    "Nome della scuola",
+                    placeholder="Es. Istituto Comprensivo Alessandro Manzoni",
+                    help="Puoi inserire anche solo una parte della denominazione.",
+                ).strip()
+            with col_regione:
+                regione_scuola_ricerca = st.selectbox(
+                    "Regione",
+                    ["Seleziona…"] + regioni_italia,
+                    index=0,
+                    help="Scegli la regione in cui si trova la scuola.",
+                )
+                if regione_scuola_ricerca == "Seleziona…":
+                    regione_scuola_ricerca = ""
+            avvia_ricerca_scuola = st.form_submit_button(
+                "🔎 Cerca scuola", use_container_width=True, type="primary"
+            )
 
     # Se i CSV non sono stati inseriti nel repository insieme ad app.py, è possibile caricarli qui.
     percorsi_csv_locali = [
@@ -979,7 +1031,7 @@ if st.session_state.get("pagina_ricerca_scuola", False):
                         archivi, nome_scuola_ricerca, regione_scuola_ricerca
                     )
                 if risultati_locali:
-                    st.success(f"Trovate {len(risultati_locali)} corrispondenze negli archivi scolastici, senza consumare richieste Gemini.")
+                    st.success(f"Trovate {len(risultati_locali)} scuole negli archivi ufficiali, senza consumare richieste Gemini.")
                     mostra_schede_scuole(risultati_locali)
                     if any(not (r["telefono"] and r["email"] and r["sito"]) for r in risultati_locali):
                         query_web = f'"{nome_scuola_ricerca}" {regione_scuola_ricerca} scuola codice meccanografico telefono email sito ufficiale'
