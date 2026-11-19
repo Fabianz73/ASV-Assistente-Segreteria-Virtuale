@@ -2,7 +2,10 @@ import io
 import re
 import textwrap
 import unicodedata
+import time
+from html import unescape
 from urllib.parse import quote_plus
+from urllib.request import Request, urlopen
 
 import streamlit as st
 from google import genai
@@ -19,13 +22,90 @@ st.set_page_config(
     layout="wide",
 )
 
-MODEL_NAME = "gemini-2.5-flash-lite"
+MODEL_NAME = "gemini-3.5-flash-lite"  # Modello economico, adatto a richieste frequenti
+
+
+def cerca_web_pubblica(query, max_risultati=8):
+    """Recupera risultati pubblici da DuckDuckGo senza usare il grounding a pagamento."""
+    url = "https://html.duckduckgo.com/html/?q=" + quote_plus(query)
+    richiesta = Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; AVSOffice/1.0)"},
+    )
+    with urlopen(richiesta, timeout=12) as risposta:
+        pagina = risposta.read().decode("utf-8", errors="replace")
+
+    blocchi = re.findall(
+        r'<div[^>]+class="result[^"]*"[^>]*>(.*?)</div>\s*</div>',
+        pagina,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    risultati = []
+    for blocco in blocchi:
+        link_match = re.search(
+            r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+            blocco,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not link_match:
+            continue
+        link = unescape(re.sub(r"<[^>]+>", "", link_match.group(1))).strip()
+        titolo = unescape(re.sub(r"<[^>]+>", "", link_match.group(2))).strip()
+        snippet_match = re.search(
+            r'<(?:a|div)[^>]+class="result__snippet"[^>]*>(.*?)</(?:a|div)>',
+            blocco,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        snippet = unescape(re.sub(r"<[^>]+>", " ", snippet_match.group(1))).strip() if snippet_match else ""
+        if titolo and link.startswith("http"):
+            risultati.append({"titolo": titolo, "url": link, "estratto": re.sub(r"\s+", " ", snippet)})
+        if len(risultati) >= max_risultati:
+            break
+    return risultati
 
 
 @st.cache_resource
 def get_gemini_client(api_key):
     """Riutilizza il client Gemini invece di ricrearlo a ogni richiesta."""
     return genai.Client(api_key=api_key)
+
+
+def genera_con_attesa(client, *, modello, contenuti, configurazione, max_tentativi=2):
+    """Chiama Gemini e gestisce brevi limiti RPM con un conto alla rovescia discreto.
+
+    Per limiti giornalieri non tiene aperta la pagina per ore: mostra un errore
+    leggibile al chiamante, che potrà indicare all'utente di riprovare più tardi.
+    """
+    for tentativo in range(max_tentativi):
+        try:
+            return client.models.generate_content(
+                model=modello, contents=contenuti, config=configurazione
+            )
+        except Exception as exc:
+            errore = str(exc)
+            if "429" not in errore and "RESOURCE_EXHAUSTED" not in errore:
+                raise
+            # Legge eventuale RetryInfo restituito dall'API; in assenza usa 12 s.
+            match = re.search(r"(?:retryDelay|retry_delay)[^\n]{0,35}?(\d+)s", errore, re.I)
+            if not match:
+                match = re.search(r"RetryInfo[^\n]{0,100}?(\d+)s", errore, re.I)
+            attesa = int(match.group(1)) if match else 12
+            # Una pausa lunga è probabilmente un limite giornaliero: niente attese infinite.
+            if attesa > 45 or tentativo >= max_tentativi - 1:
+                if attesa > 45:
+                    raise RuntimeError(
+                        f"QUOTA_GIORNALIERA: Google ha indicato di riprovare tra circa "
+                        f"{attesa // 3600} h e {(attesa % 3600) // 60} min. "
+                        "AVS non ripeterà automaticamente la richiesta per evitare chiamate inutili."
+                    ) from exc
+                raise
+            attesa = max(3, attesa)
+            box_attesa = st.empty()
+            for secondi in range(attesa, 0, -1):
+                box_attesa.caption(f"⏳ Servizio occupato: nuovo tentativo tra {secondi} s…")
+                time.sleep(1)
+            box_attesa.empty()
+    raise RuntimeError("Richiesta non completata. Riprova tra poco.")
 
 st.markdown(
     """
@@ -158,6 +238,18 @@ st.markdown(
         border-radius: 14px;
         background: rgba(255, 255, 255, 0.78);
     }
+
+    /* Piccoli dettagli grafici: interfaccia ariosa senza appesantire la pagina */
+    div[data-testid="stVerticalBlock"] > div:has(> div[data-testid="stMetric"]) {
+        background: #FFFFFF;
+        border: 1px solid var(--avs-border);
+        border-radius: 14px;
+        padding: 0.45rem 0.7rem;
+    }
+    [data-testid="stSidebar"] .stRadio label {
+        font-weight: 650;
+    }
+    .stSpinner > div { border-top-color: var(--avs-lavender) !important; }
 
     [data-testid="stAlert"] {
         border-radius: 14px;
@@ -724,19 +816,28 @@ Non inventare né dedurre codici, numeri di telefono, indirizzi email o siti. Pe
 """
                 try:
                     with st.spinner("AVS sta cercando nelle fonti pubbliche..."):
+                        query_web = f'"{nome_scuola_ricerca}" {regione_scuola_ricerca} scuola codice meccanografico telefono email sito ufficiale'
+                        risultati_web = cerca_web_pubblica(query_web)
+                        if not risultati_web:
+                            st.warning("Il motore di ricerca non ha restituito risultati leggibili. Puoi aprire la ricerca direttamente qui sotto.")
+                            st.markdown(f"[Apri la ricerca sul web](https://www.google.com/search?q={quote_plus(query_web)})")
+                            st.stop()
+                        fonti_web = "\n".join(
+                            f"- Titolo: {r['titolo']}\n  URL: {r['url']}\n  Estratto: {r['estratto']}"
+                            for r in risultati_web
+                        )
+                        prompt_completo = prompt_scuola + "\n\nRISULTATI WEB REPERITI ORA (usa questi dati e link; non inventare ciò che manca):\n" + fonti_web
                         client = get_gemini_client(api_key)
-                        risposta_scuola = client.models.generate_content(
-                            model=MODEL_NAME,
-                            contents=prompt_scuola,
-                            config=types.GenerateContentConfig(
+                        risposta_scuola = genera_con_attesa(
+                            client, modello=MODEL_NAME, contenuti=prompt_completo,
+                            configurazione=types.GenerateContentConfig(
                                 system_instruction=(
                                     "Sei AVS, assistente per le segreterie scolastiche italiane. "
-                                    "Per questa richiesta usa la ricerca web. Sii prudente: non inventare dati, "
-                                    "codici o URL; cita link diretti alle fonti realmente consultate."
+                                    "Usa i risultati web forniti, privilegia fonti ufficiali e cita solo URL presenti nei risultati. "
+                                    "Gli estratti possono essere incompleti: non inventare codici, contatti o dati mancanti."
                                 ),
                                 temperature=0.1,
                                 max_output_tokens=1800,
-                                tools=[types.Tool(google_search=types.GoogleSearch())],
                             ),
                         )
                     testo_scuola = (risposta_scuola.text or "").strip()
@@ -746,11 +847,14 @@ Non inventare né dedurre codici, numeri di telefono, indirizzi email o siti. Pe
                     else:
                         st.warning("La ricerca non ha restituito una risposta testuale. Riprova con il nome completo della scuola.")
                 except Exception as exc:
-                    st.error(
-                        "Non è stato possibile completare la ricerca. Potrebbe dipendere dalla disponibilità "
-                        "della ricerca web per il modello o dalla quota API."
-                    )
-                    st.code(str(exc))
+                    dettaglio = str(exc)
+                    if "QUOTA_GIORNALIERA" in dettaglio:
+                        st.warning("⏳ Limite temporaneo di Gemini raggiunto. " + dettaglio.replace("QUOTA_GIORNALIERA:", ""))
+                    elif "429" in dettaglio or "RESOURCE_EXHAUSTED" in dettaglio:
+                        st.warning("⏳ Troppe richieste in questo momento. Attendi un po' e riprova; non è necessario modificare i PDF.")
+                    else:
+                        st.error("Non è stato possibile completare la ricerca. Verifica la connessione e riprova.")
+                        st.caption(dettaglio[:500])
 
     st.info(
         "Nota: il codice meccanografico può cambiare tra istituto principale e plessi. "
@@ -851,10 +955,9 @@ Regole:
                 try:
                     with st.spinner("AVS sta preparando la bozza..."):
                         client = get_gemini_client(api_key)
-                        risposta_modulo = client.models.generate_content(
-                            model=MODEL_NAME,
-                            contents=prompt_modulo,
-                            config=types.GenerateContentConfig(
+                        risposta_modulo = genera_con_attesa(
+                            client, modello=MODEL_NAME, contenuti=prompt_modulo,
+                            configurazione=types.GenerateContentConfig(
                                 system_instruction=(
                                     "Sei AVS, assistente per le segreterie scolastiche italiane. "
                                     "Genera bozze prudenti, chiare e pratiche. Non inventare "
@@ -871,11 +974,14 @@ Regole:
                         st.session_state["modulo_testo_editabile"] = testo_generato
                         st.session_state["modulo_guidato_pronto"] = True
                 except Exception as exc:
-                    st.error(
-                        "Non è stato possibile generare la bozza. Controlla la connessione "
-                        "e la configurazione di Gemini."
-                    )
-                    st.code(str(exc))
+                    dettaglio = str(exc)
+                    if "QUOTA_GIORNALIERA" in dettaglio:
+                        st.warning("⏳ Limite temporaneo di Gemini raggiunto. " + dettaglio.replace("QUOTA_GIORNALIERA:", ""))
+                    elif "429" in dettaglio or "RESOURCE_EXHAUSTED" in dettaglio:
+                        st.warning("⏳ Gemini è momentaneamente occupato. Attendi un po' e riprova.")
+                    else:
+                        st.error("Non è stato possibile generare la bozza. Controlla la connessione e i Secrets.")
+                        st.caption(dettaglio[:500])
 
     if st.session_state["modulo_guidato_pronto"] or st.session_state["modulo_testo_editabile"]:
         st.divider()
@@ -953,22 +1059,17 @@ else:
 
                     # Nelle azioni rapide abilita la ricerca web di Gemini, così il contesto
                     # della scuola viene verificato online usando nome/località/sito, non il codice.
-                    strumenti_ricerca = (
-                        [types.Tool(google_search=types.GoogleSearch())]
-                        if ricerca_web_azione_rapida
-                        else None
-                    )
+                    # Il livello gratuito di Gemini 3.5 Flash-Lite non include Google Search grounding.
+                    # Le richieste normali e le azioni rapide usano quindi il modello senza tool grounding.
                     configurazione = types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
                         temperature=0.2,
                         max_output_tokens=1400 if ricerca_web_azione_rapida else 900,
-                        tools=strumenti_ricerca,
                     )
 
-                    risposta = client.models.generate_content(
-                        model=MODEL_NAME,
-                        contents=contenuti,
-                        config=configurazione,
+                    risposta = genera_con_attesa(
+                        client, modello=MODEL_NAME, contenuti=contenuti,
+                        configurazione=configurazione,
                     )
 
                     testo_risposta = (risposta.text or "").strip()
@@ -984,8 +1085,11 @@ else:
                     )
 
                 except Exception as exc:
-                    st.error(
-                        "Si è verificato un problema durante la richiesta a Gemini. "
-                        "Controlla la chiave API, la connessione e il nome del modello."
-                    )
-                    st.code(str(exc))
+                    dettaglio = str(exc)
+                    if "QUOTA_GIORNALIERA" in dettaglio:
+                        st.warning("⏳ Limite temporaneo di Gemini raggiunto. " + dettaglio.replace("QUOTA_GIORNALIERA:", ""))
+                    elif "429" in dettaglio or "RESOURCE_EXHAUSTED" in dettaglio:
+                        st.warning("⏳ Troppe richieste in questo momento. Attendi qualche secondo e riprova.")
+                    else:
+                        st.error("Si è verificato un problema durante la richiesta a Gemini. Verifica chiave API e modello.")
+                        st.caption(dettaglio[:500])
