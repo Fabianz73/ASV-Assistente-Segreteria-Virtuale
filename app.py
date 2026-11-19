@@ -2,6 +2,7 @@ import hashlib, io, os, re, unicodedata
 from urllib.parse import quote_plus
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 from reportlab.lib import colors
@@ -10,6 +11,37 @@ from reportlab.pdfgen import canvas
 
 st.set_page_config(page_title="AVS - Assistente Virtuale Scolastico", page_icon="🏫", layout="wide")
 MODEL_NAME = "gemini-2.5-flash"
+
+SIGLE_PROVINCE = {
+    "AG": "AGRIGENTO", "AL": "ALESSANDRIA", "AN": "ANCONA", "AO": "AOSTA",
+    "AP": "ASCOLI PICENO", "AQ": "L'AQUILA", "AR": "AREZZO", "AT": "ASTI",
+    "AV": "AVELLINO", "BA": "BARI", "BG": "BERGAMO", "BI": "BIELLA",
+    "BL": "BELLUNO", "BN": "BENEVENTO", "BO": "BOLOGNA", "BR": "BRINDISI",
+    "BS": "BRESCIA", "BT": "BARLETTA-ANDRIA-TRANI", "BZ": "BOLZANO",
+    "CA": "CAGLIARI", "CB": "CAMPOBASSO", "CE": "CASERTA", "CH": "CHIETI",
+    "CL": "CALTANISSETTA", "CN": "CUNEO", "CO": "COMO", "CR": "CREMONA",
+    "CS": "COSENZA", "CT": "CATANIA", "CZ": "CATANZARO", "EN": "ENNA",
+    "FC": "FORLI'-CESENA", "FE": "FERRARA", "FG": "FOGGIA", "FI": "FIRENZE",
+    "FM": "FERMO", "FR": "FROSINONE", "GE": "GENOVA", "GO": "GORIZIA",
+    "GR": "GROSSETO", "IM": "IMPERIA", "IS": "ISERNIA", "KR": "CROTONE",
+    "LC": "LECCO", "LE": "LECCE", "LI": "LIVORNO", "LO": "LODI",
+    "LT": "LATINA", "LU": "LUCCA", "MB": "MONZA E DELLA BRIANZA",
+    "MC": "MACERATA", "ME": "MESSINA", "MI": "MILANO", "MN": "MANTOVA",
+    "MO": "MODENA", "MS": "MASSA-CARRARA", "MT": "MATERA", "NA": "NAPOLI",
+    "NO": "NOVARA", "NU": "NUORO", "OR": "ORISTANO", "PA": "PALERMO",
+    "PC": "PIACENZA", "PD": "PADOVA", "PE": "PESCARA", "PG": "PERUGIA",
+    "PI": "PISA", "PN": "PORDENONE", "PO": "PRATO", "PR": "PARMA",
+    "PT": "PISTOIA", "PU": "PESARO E URBINO", "PV": "PAVIA", "PZ": "POTENZA",
+    "RA": "RAVENNA", "RC": "REGGIO DI CALABRIA", "RE": "REGGIO NELL'EMILIA",
+    "RG": "RAGUSA", "RI": "RIETI", "RM": "ROMA", "RN": "RIMINI",
+    "RO": "ROVIGO", "SA": "SALERNO", "SI": "SIENA", "SO": "SONDRIO",
+    "SP": "LA SPEZIA", "SR": "SIRACUSA", "SS": "SASSARI", "SU": "SUD SARDEGNA",
+    "SV": "SAVONA", "TA": "TARANTO", "TE": "TERAMO", "TN": "TRENTO",
+    "TO": "TORINO", "TP": "TRAPANI", "TR": "TERNI", "TS": "TRIESTE",
+    "TV": "TREVISO", "UD": "UDINE", "VA": "VARESE", "VB": "VERBANO-CUSIO-OSSOLA",
+    "VC": "VERCELLI", "VE": "VENEZIA", "VI": "VICENZA", "VR": "VERONA",
+    "VT": "VITERBO", "VV": "VIBO VALENTIA",
+}
 
 @st.cache_resource
 def get_gemini_client(api_key):
@@ -47,32 +79,9 @@ p,label,li,.stMarkdown,.stCaption{font-family:'Nunito Sans',sans-serif}
 [data-testid="stAlert"]{border-radius:14px}
 .trappola-box{background:#FFF0ED;border-left:5px solid #C96D61;padding:15px 17px;border-radius:12px;margin:15px 0;color:#843E37;font-weight:700;font-size:1.02em}
 .risposta-diretta{background:var(--sagep);border-left:5px solid var(--sage);padding:15px 17px;border-radius:12px;margin-top:20px;color:#285B49;font-weight:700;font-size:1.02em}
-.avs-hero{position:relative;overflow:hidden;background:linear-gradient(115deg,#F0EBFA 0%,#F8F5FB 54%,#EAF4EF 100%);border:1px solid #E6E0EA;border-radius:18px;padding:17px 22px 26px 22px;margin:8px 0 22px 0}
-.avs-hero-title{font-size:1.08rem;font-weight:800;color:#40384F}
-.avs-hero-sub{font-size:0.92rem;color:#716B79;margin-top:4px;padding-right:110px}
-.avs-hero::after{content:"✦   ·   ♡";position:absolute;right:18px;top:12px;color:rgba(98,84,143,.20);font-size:1.05rem;letter-spacing:7px;pointer-events:none}
-.avs-cat-chase{position:absolute;right:16px;bottom:6px;width:180px;height:30px;pointer-events:none;user-select:none}
-.avs-mouse,.avs-cat{position:absolute;bottom:0;display:inline-block;line-height:1}
-.avs-mouse{right:8px;font-size:17px;animation:avs-mouse-run 3.4s ease-in-out 0.3s forwards}
-.avs-cat{right:34px;font-size:23px;animation:avs-cat-run 3.4s ease-in-out 0.45s forwards}
-@keyframes avs-mouse-run{
-  0%{transform:translateX(0) translateY(0);opacity:0}
-  12%{opacity:1}
-  45%{transform:translateX(-85px) translateY(-3px);opacity:1}
-  75%{transform:translateX(-135px) translateY(0);opacity:0.9}
-  100%{transform:translateX(-175px) translateY(0);opacity:0}
-}
-@keyframes avs-cat-run{
-  0%{transform:translateX(0) translateY(0);opacity:0}
-  12%{opacity:1}
-  45%{transform:translateX(-75px) translateY(-4px);opacity:1}
-  75%{transform:translateX(-125px) translateY(0);opacity:0.9}
-  100%{transform:translateX(-165px) translateY(0);opacity:0}
-}
-@media (prefers-reduced-motion:reduce){.avs-cat-chase{display:none!important}}
 [data-testid="stRadio"] label{border-radius:10px}
 hr{border-color:var(--border)}
-@media (max-width:768px){.avs-cat-chase{right:8px;bottom:4px;transform:scale(.82);transform-origin:bottom right}h1{font-size:1.8rem!important}[data-testid="stChatMessage"]{padding:.8rem}}
+@media (max-width:768px){h1{font-size:1.8rem!important}[data-testid="stChatMessage"]{padding:.8rem}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -245,6 +254,10 @@ def carica_dati_scuole():
                     raise ValueError
             except Exception:
                 df = pd.read_csv(file_path, encoding="latin-1", sep=";")
+            df.columns = [str(c).strip() for c in df.columns]
+            for col in ["REGIONE", "PROVINCIA", "DESCRIZIONECOMUNE", "DENOMINAZIONESCUOLA", "CODICESCUOLA"]:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.strip()
             df["TIPO_GESTIONE_AVS"] = tipo_gestione
             dfs.append(df)
         except Exception as e:
@@ -261,18 +274,22 @@ def cerca_scuole(query, regione=None, provincia=None, solo_paritarie=False, limi
     if df is None:
         return [], "Impossibile caricare i dati delle scuole."
 
-    if query:
+    if query and query.strip():
         q = query.strip()
-        m_nome = df["DENOMINAZIONESCUOLA"].astype(str).str.contains(q, case=False, na=False)
-        m_comune = df["DESCRIZIONECOMUNE"].astype(str).str.contains(q, case=False, na=False)
-        m_codice = df["CODICESCUOLA"].astype(str).str.contains(q, case=False, na=False)
+        m_nome = df["DENOMINAZIONESCUOLA"].str.contains(q, case=False, na=False, regex=False)
+        m_comune = df["DESCRIZIONECOMUNE"].str.contains(q, case=False, na=False, regex=False)
+        m_codice = df["CODICESCUOLA"].str.contains(q, case=False, na=False, regex=False)
         df = df[m_nome | m_comune | m_codice]
 
     if regione:
-        df = df[df["REGIONE"].astype(str).str.upper() == regione.upper()]
+        df = df[df["REGIONE"].str.upper() == regione.strip().upper()]
 
     if provincia and provincia.strip():
-        df = df[df["PROVINCIA"].astype(str).str.upper() == provincia.strip().upper()]
+        p = provincia.strip().upper()
+        p_estesa = SIGLE_PROVINCE.get(p, p)
+        m_prov = df["PROVINCIA"].str.upper().str.contains(p_estesa, na=False, regex=False)
+        m_cod_prov = df["CODICESCUOLA"].str.upper().str.startswith(p) if len(p) == 2 else False
+        df = df[m_prov | m_cod_prov]
 
     if solo_paritarie:
         df = df[df["TIPO_GESTIONE_AVS"] == "PARITARIA"]
@@ -322,7 +339,11 @@ def formatta_e_mostra(testo, indice_msg):
     testo_modulo = None
     if m_modulo:
         testo_modulo = m_modulo.group(1).strip()
-        testo_pulito = testo_pulito.replace(m_modulo.group(0), "\n\n**📄 Modulo generato e pronto per il download qui sotto.**\n\n")
+        testo_pulito = testo_pulito.replace(m_modulo.group(0), "
+
+**📄 Modulo generato e pronto per il download qui sotto.**
+
+")
     m_diretta = re.search(r"\[DIRETTA\](.*?)\[/DIRETTA\]", testo_pulito, re.DOTALL | re.IGNORECASE)
     diretta_html = ""
     if m_diretta:
@@ -354,16 +375,93 @@ def formatta_e_mostra(testo, indice_msg):
 st.title("🏫 AVS Office")
 st.caption("Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria")
 
-st.markdown("""
-<div class="avs-hero">
-  <div class="avs-hero-title">La tua segreteria, un po’ più semplice ✨</div>
-  <div class="avs-hero-sub">Procedure, risposte operative e moduli compilabili in un unico spazio.</div>
-  <div class="avs-cat-chase">
-    <span class="avs-mouse">🐭</span>
-    <span class="avs-cat">🐈</span>
+if "anim_run_id" not in st.session_state:
+    st.session_state["anim_run_id"] = 1
+
+banner_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Nunito Sans', sans-serif; background: transparent; overflow: hidden; }}
+  .hero {{
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(115deg, #F0EBFA 0%, #F8F5FB 54%, #EAF4EF 100%);
+    border: 1px solid #E6E0EA;
+    border-radius: 18px;
+    padding: 17px 22px 26px 22px;
+    width: 100%;
+  }}
+  .hero::after {{
+    content: "✦   ·   ♡";
+    position: absolute;
+    right: 18px;
+    top: 12px;
+    color: rgba(98, 84, 143, 0.25);
+    font-size: 1.05rem;
+    letter-spacing: 7px;
+    pointer-events: none;
+  }}
+  .title {{ font-size: 1.08rem; font-weight: 800; color: #40384F; }}
+  .sub {{ font-size: 0.92rem; color: #716B79; margin-top: 4px; padding-right: 110px; }}
+  .chase {{
+    position: absolute;
+    right: 16px;
+    bottom: 6px;
+    width: 240px;
+    height: 30px;
+    pointer-events: none;
+    user-select: none;
+  }}
+  .mouse, .cat {{
+    position: absolute;
+    bottom: 0;
+    display: inline-block;
+    line-height: 1;
+  }}
+  .mouse {{
+    right: 10px;
+    font-size: 18px;
+    animation: mouse-run-{st.session_state["anim_run_id"]} 3.8s ease-in-out 0.2s forwards;
+  }}
+  .cat {{
+    right: 38px;
+    font-size: 24px;
+    animation: cat-run-{st.session_state["anim_run_id"]} 3.8s ease-in-out 0.35s forwards;
+  }}
+  @keyframes mouse-run-{st.session_state["anim_run_id"]} {{
+    0% {{ transform: translateX(0) translateY(0); opacity: 0; }}
+    10% {{ opacity: 1; }}
+    45% {{ transform: translateX(-110px) translateY(-4px); opacity: 1; }}
+    75% {{ transform: translateX(-180px) translateY(0); opacity: 0.9; }}
+    100% {{ transform: translateX(-230px) translateY(0); opacity: 0; }}
+  }}
+  @keyframes cat-run-{st.session_state["anim_run_id"]} {{
+    0% {{ transform: translateX(0) translateY(0); opacity: 0; }}
+    10% {{ opacity: 1; }}
+    45% {{ transform: translateX(-100px) translateY(-5px); opacity: 1; }}
+    75% {{ transform: translateX(-170px) translateY(0); opacity: 0.9; }}
+    100% {{ transform: translateX(-220px) translateY(0); opacity: 0; }}
+  }}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <div class="title">La tua segreteria, un po’ più semplice ✨</div>
+    <div class="sub">Procedure, risposte operative e moduli compilabili in un unico spazio.</div>
+    <div class="chase">
+      <span class="mouse">🐭</span>
+      <span class="cat">🐈</span>
+    </div>
   </div>
-</div>
-""", unsafe_allow_html=True)
+</body>
+</html>
+"""
+components.html(banner_html, height=104)
 
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
@@ -409,6 +507,10 @@ with st.sidebar:
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
+    st.divider()
+    if st.button("🐈 Rivedi pausa felina", use_container_width=True):
+        st.session_state["anim_run_id"] += 1
+        st.rerun()
 
 if strumento == "Crea modulo PDF compilabile":
     st.subheader("📄 Crea un modulo PDF compilabile")
@@ -493,7 +595,7 @@ elif strumento == "Cerca codici meccanografici":
     st.write("Cerca per nome scuola, comune o codice meccanografico. I dati provengono dal dataset ufficiale del Ministero.")
     col1, col2, col3 = st.columns([2, 1.5, 1])
     with col1:
-        query_scuola = st.text_input("Nome scuola, comune o codice", placeholder="Es. Manzoni, Firenze, FIIC8...")
+        query_scuola = st.text_input("Nome scuola, comune o codice", placeholder="Es. Ghiberti, Firenze, FIIC8...")
     with col2:
         regioni = {
             "Tutte": None,
@@ -507,7 +609,7 @@ elif strumento == "Cerca codici meccanografici":
         }
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
     with col3:
-        provincia_sel = st.text_input("Sigla Provincia", placeholder="Es. FI, RM", max_chars=2)
+        provincia_sel = st.text_input("Provincia (sigla o nome)", placeholder="Es. FI o FIRENZE")
     solo_paritarie = st.checkbox("Solo scuole paritarie", value=False)
 
     if st.button("🔎 Cerca", use_container_width=True):
@@ -520,6 +622,7 @@ elif strumento == "Cerca codici meccanografici":
                 st.error(f"Errore: {troncati}")
             elif not scuole:
                 st.info("Nessuna scuola trovata.")
+                st.session_state["risultati_scuole"] = []
             else:
                 st.session_state["risultati_scuole"] = scuole
                 st.session_state["risultati_troncati"] = troncati
