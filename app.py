@@ -8,20 +8,20 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import os
-
+ 
 st.set_page_config(page_title="AVS - Assistente Virtuale Scolastico", page_icon="🏫", layout="wide")
-MODEL_NAME = "gemini-3.5-flash-lite"
-
+MODEL_NAME = "gemini-2.0-flash"  # verificare che il modello sia disponibile nel proprio account
+ 
 @st.cache_resource
 def get_gemini_client(api_key):
     return genai.Client(api_key=api_key)
-
+ 
 def get_api_key():
     try:
         return st.secrets["GEMINI_API_KEY"]
     except (KeyError, FileNotFoundError):
         return None
-
+ 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800;900&display=swap');
@@ -62,7 +62,7 @@ hr{border-color:var(--border)}
 @media (max-width:768px){.avs-cat-chase{right:8px;bottom:5px;transform:scale(.82);transform-origin:bottom right}h1{font-size:1.8rem!important}[data-testid="stChatMessage"]{padding:.8rem}}
 </style>
 """, unsafe_allow_html=True)
-
+ 
 SYSTEM_PROMPT = """
 Sei AVS, Assistente Virtuale Scolastico per le segreterie scolastiche italiane.
 Rispondi in italiano, in modo pratico, chiaro e conciso.
@@ -83,12 +83,23 @@ FORMATO:
 - Non creare un modulo PDF se non è richiesto.
 - Evita ripetizioni, spiegazioni lunghe e linguaggio burocratico superfluo.
 """
-
+ 
 def nome_campo_sicuro(testo, indice):
     t = unicodedata.normalize("NFKD", testo).encode("ascii", "ignore").decode("ascii")
     t = re.sub(r"[^A-Za-z0-9_]+", "_", t).strip("_")
     return f"campo_{indice}_{t[:24] or 'testo'}"
-
+ 
+def normalizza_url(url):
+    """Restituisce un URL cliccabile valido, oppure None se il campo è vuoto/non valido."""
+    if not isinstance(url, str):
+        return None
+    u = url.strip().split(";")[0].strip()
+    if not u or u.lower() in {"nan", "none", "-", "n.d.", "nd"}:
+        return None
+    if not re.match(r"^https?://", u, re.IGNORECASE):
+        u = "https://" + u
+    return u
+ 
 def crea_pdf_editabile(testo_modulo):
     if not testo_modulo or not testo_modulo.strip():
         raise ValueError("Il testo del modulo è vuoto.")
@@ -99,19 +110,19 @@ def crea_pdf_editabile(testo_modulo):
     lt = larghezza - ms - md
     y = altezza - 82
     num = 0
-
+ 
     def intestazione():
         pdf.setFont("Helvetica-Bold", 10)
         pdf.drawString(ms, altezza - 40, "ISTITUTO SCOLASTICO STATALE - SEGRETERIA AMMINISTRATIVA")
         pdf.setStrokeColor(colors.grey)
         pdf.line(ms, altezza - 50, larghezza - md, altezza - 50)
-
+ 
     def nuova_pagina():
         nonlocal y
         pdf.showPage()
         intestazione()
         y = altezza - 72
-
+ 
     def disegna(testo, font="Helvetica", dim=10):
         nonlocal y
         linea = ""
@@ -133,7 +144,7 @@ def crea_pdf_editabile(testo_modulo):
             y -= 17
             if y < 65:
                 nuova_pagina()
-
+ 
     intestazione()
     for i, riga_orig in enumerate(testo_modulo.strip().splitlines()):
         riga = riga_orig.strip()
@@ -185,15 +196,15 @@ def crea_pdf_editabile(testo_modulo):
     pdf.save()
     buffer.seek(0)
     return buffer.getvalue()
-
+ 
 @st.cache_data
 def carica_dati_scuole():
     """Carica e unisce i dati delle scuole statali e paritarie dai file CSV."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    
+ 
     file_statali = os.path.join(script_dir, "SCUANAGRAFESTAT20262720260901.csv")
     file_paritarie = os.path.join(script_dir, "SCUANAGRAFEPAR20262720260901.csv")
-    
+ 
     dfs = []
     for file_path in [file_statali, file_paritarie]:
         if not os.path.exists(file_path):
@@ -203,40 +214,45 @@ def carica_dati_scuole():
                 df = pd.read_csv(file_path, encoding='latin-1', sep=',')
                 if len(df.columns) == 1:
                     raise ValueError
-            except:
+            except Exception:
                 df = pd.read_csv(file_path, encoding='latin-1', sep=';')
             dfs.append(df)
         except Exception as e:
             st.warning(f"Impossibile leggere {file_path}: {e}")
-            
+ 
     if not dfs:
         st.error("Nessun file CSV trovato. Carica i file su GitHub.")
         return None
-        
+ 
     df_totale = pd.concat(dfs, ignore_index=True)
     return df_totale
-
+ 
 def cerca_scuole(query, regione=None, solo_paritarie=False):
     """Cerca scuole nei dati locali."""
     df = carica_dati_scuole()
     if df is None:
         return [], "Impossibile caricare i dati delle scuole."
-    
+ 
+    colonne_attese = ["DENOMINAZIONESCUOLA", "REGIONE", "DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA"]
+    mancanti = [c for c in colonne_attese if c not in df.columns]
+    if mancanti:
+        return [], f"Colonne mancanti nel CSV: {', '.join(mancanti)}"
+ 
     if query:
         maschera_nome = df['DENOMINAZIONESCUOLA'].astype(str).str.contains(query, case=False, na=False)
         df = df[maschera_nome]
-    
+ 
     if regione:
         maschera_regione = df['REGIONE'].astype(str).str.upper() == regione.upper()
         df = df[maschera_regione]
-    
+ 
     if solo_paritarie:
         df = df[df['DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA'].astype(str).str.contains('NON STATALE', case=False, na=False)]
-    
+ 
     df = df.head(50)
     risultati = df.to_dict('records')
     return risultati, None
-
+ 
 def formatta_e_mostra(testo, indice_msg):
     testo_pulito = testo or ""
     m_trappola = re.search(r"\[TRAPPOLE\](.*?)\[/TRAPPOLE\]", testo_pulito, re.DOTALL | re.IGNORECASE)
@@ -269,13 +285,13 @@ def formatta_e_mostra(testo, indice_msg):
             st.error(f"Non è stato possibile generare il PDF: {exc}")
     if diretta_html:
         st.markdown(diretta_html, unsafe_allow_html=True)
-
+ 
 st.title("🏫 AVS Office")
 st.caption("Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria")
-
+ 
 mostra_anim = not st.session_state.get("avs_animazione_mostrata", False)
 st.session_state["avs_animazione_mostrata"] = True
-
+ 
 hero_html = """
 <div class="avs-hero" style="background:linear-gradient(115deg,#F0EBFA 0%,#F8F5FB 54%,#EAF4EF 100%);border:1px solid #E6E0EA;border-radius:18px;padding:17px 22px 24px 22px;margin:8px 0 22px 0;">
 <div style="font-size:1.08rem;font-weight:800;color:#40384F;">La tua segreteria, un po’ più semplice ✨</div>
@@ -290,14 +306,14 @@ anim = """
 </div>
 """ if mostra_anim else ""
 st.markdown(hero_html.replace("__AVS_CAT_ANIMATION__", anim), unsafe_allow_html=True)
-
+ 
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
 if "modulo_testo_editabile" not in st.session_state:
     st.session_state["modulo_testo_editabile"] = ""
 if "modulo_guidato_pronto" not in st.session_state:
     st.session_state["modulo_guidato_pronto"] = False
-
+ 
 with st.sidebar:
     st.header("🧰 Strumenti AVS")
     strumento = st.radio("Che cosa vuoi fare?", ["Assistente segreteria", "Crea modulo PDF compilabile", "Cerca codici meccanografici"], key="strumento_avs")
@@ -326,7 +342,7 @@ with st.sidebar:
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
-
+ 
 if strumento == "Crea modulo PDF compilabile":
     st.subheader("📄 Crea un modulo PDF compilabile")
     st.write("Descrivi il documento che ti serve. AVS preparerà una bozza da controllare; potrai correggerla prima di scaricare il PDF.")
@@ -359,7 +375,7 @@ Destinatario: {destinatario.strip() or "da specificare"}
 Scopo: {scopo.strip()}
 Campi richiesti: {campi_richiesti.strip() or "individua i campi strettamente necessari"}
 Indicazioni fornite dall'utente: {riferimenti.strip() or "nessuna"}
-
+ 
 Regole:
 - Rispondi in italiano con il testo del modulo, senza introduzioni e senza markdown decorativo.
 - Prima riga: titolo breve del modulo.
@@ -404,13 +420,13 @@ elif strumento == "Cerca codici meccanografici":
         query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
     with col2:
         regioni = {
-            "Tutte": None, 
-            "ABRUZZO": "ABRUZZO", "BASILICATA": "BASILICATA", "CALABRIA": "CALABRIA", 
-            "CAMPANIA": "CAMPANIA", "EMILIA ROMAGNA": "EMILIA ROMAGNA", 
-            "FRIULI-VENEZIA G.": "FRIULI-VENEZIA G.", "LAZIO": "LAZIO", "LIGURIA": "LIGURIA", 
-            "LOMBARDIA": "LOMBARDIA", "MARCHE": "MARCHE", "MOLISE": "MOLISE", 
-            "PIEMONTE": "PIEMONTE", "PUGLIA": "PUGLIA", "SARDEGNA": "SARDEGNA", 
-            "SICILIA": "SICILIA", "TOSCANA": "TOSCANA", "TRENTINO ALTO ADIGE": "TRENTINO ALTO ADIGE", 
+            "Tutte": None,
+            "ABRUZZO": "ABRUZZO", "BASILICATA": "BASILICATA", "CALABRIA": "CALABRIA",
+            "CAMPANIA": "CAMPANIA", "EMILIA ROMAGNA": "EMILIA ROMAGNA",
+            "FRIULI-VENEZIA G.": "FRIULI-VENEZIA G.", "LAZIO": "LAZIO", "LIGURIA": "LIGURIA",
+            "LOMBARDIA": "LOMBARDIA", "MARCHE": "MARCHE", "MOLISE": "MOLISE",
+            "PIEMONTE": "PIEMONTE", "PUGLIA": "PUGLIA", "SARDEGNA": "SARDEGNA",
+            "SICILIA": "SICILIA", "TOSCANA": "TOSCANA", "TRENTINO ALTO ADIGE": "TRENTINO ALTO ADIGE",
             "UMBRIA": "UMBRIA", "VALLE D'AOSTA": "VALLE D'AOSTA", "VENETO": "VENETO"
         }
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
@@ -427,16 +443,14 @@ elif strumento == "Cerca codici meccanografici":
                 st.info("Nessuna scuola trovata.")
             else:
                 st.success(f"Trovate {len(scuole)} scuole.")
-                
-                # Raggruppa i risultati per comune
+ 
                 scuole_per_comune = {}
                 for s in scuole:
                     comune = s.get("DESCRIZIONECOMUNE", "Comune sconosciuto")
                     if comune not in scuole_per_comune:
                         scuole_per_comune[comune] = []
                     scuole_per_comune[comune].append(s)
-                
-                # Ordina i comuni in ordine alfabetico
+ 
                 for comune in sorted(scuole_per_comune.keys()):
                     st.markdown(f"### 📍 {comune}")
                     for s in scuole_per_comune[comune]:
@@ -446,12 +460,22 @@ elif strumento == "Cerca codici meccanografici":
                         email = s.get("INDIRIZZOEMAILSCUOLA", "")
                         pec = s.get("INDIRIZZOPECSCUOLA", "")
                         indirizzo = s.get("INDIRIZZOSCUOLA", "")
-                        
-                        with st.expander(f"{denominazione} ({codice}) - {indirizzo}, {comune} ({provincia})"):
+                        sito = normalizza_url(s.get("SITOWEBSCUOLA", ""))
+ 
+                        titolo = f"{denominazione} ({codice}) - {indirizzo}, {comune} ({provincia})"
+                        if sito:
+                            titolo = "🌐 " + titolo
+ 
+                        with st.expander(titolo):
                             st.write(f"**Indirizzo:** {indirizzo}")
                             st.write(f"**Email:** {email}")
                             st.write(f"**PEC:** {pec}")
-                
+                            if sito:
+                                st.markdown(f"**Sito web:** [{sito}]({sito})")
+                                st.link_button("🌐 Apri il sito della scuola", sito, use_container_width=False)
+                            else:
+                                st.caption("Sito web non presente nel dataset per questo istituto.")
+ 
                 st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
