@@ -579,12 +579,21 @@ if "modulo_testo_editabile" not in st.session_state:
 if "modulo_guidato_pronto" not in st.session_state:
     st.session_state["modulo_guidato_pronto"] = False
 
+def torna_alla_pagina_principale():
+    """Chiude la pagina di ricerca quando si cambia strumento dal menu."""
+    st.session_state["pagina_ricerca_scuola"] = False
+
+
+if "pagina_ricerca_scuola" not in st.session_state:
+    st.session_state["pagina_ricerca_scuola"] = False
+
 with st.sidebar:
     st.header("🧰 Strumenti AVS")
     strumento = st.radio(
         "Che cosa vuoi fare?",
-        ["Assistente segreteria", "Ricerca dati della scuola", "Crea modulo PDF compilabile"],
+        ["Assistente segreteria", "Crea modulo PDF compilabile"],
         key="strumento_avs",
+        on_change=torna_alla_pagina_principale,
     )
 
     st.divider()
@@ -592,6 +601,10 @@ with st.sidebar:
     if strumento == "Assistente segreteria":
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
+
+        if st.button("🔎 Richiesta codice meccanografico scolastico", use_container_width=True):
+            st.session_state["pagina_ricerca_scuola"] = True
+            st.rerun()
 
         # Non chiediamo più il nome dell'istituto nella barra laterale.
         # Le bozze useranno segnaposto per i dati della scuola non forniti.
@@ -650,41 +663,42 @@ with st.sidebar:
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
-    else:
-        st.markdown(
-            "Cerca una scuola per nome e località per trovare il codice meccanografico, "
-            "i recapiti e il sito ufficiale."
-        )
 
 
-if strumento == "Ricerca dati della scuola":
-    st.subheader("🔎 Ricerca dati della scuola")
+if st.session_state.get("pagina_ricerca_scuola", False):
+    st.subheader("🔎 Richiesta codice meccanografico scolastico")
     st.write(
-        "Trova il codice meccanografico partendo dal nome della scuola. "
-        "Indica anche il comune per distinguere istituti con nomi simili. "
-        "AVS cercherà i contatti pubblici e il sito ufficiale nelle fonti disponibili."
+        "Inserisci il nome della scuola e la regione: AVS cercherà il codice meccanografico, "
+        "l'indirizzo, il telefono, l'email e il sito ufficiale cliccabile."
     )
+    if st.button("← Torna all'assistente segreteria"):
+        st.session_state["pagina_ricerca_scuola"] = False
+        st.rerun()
 
+    regioni_italia = [
+        "Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna",
+        "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche",
+        "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana",
+        "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto",
+    ]
     with st.form("form_ricerca_dati_scuola"):
         nome_scuola_ricerca = st.text_input(
             "Nome della scuola *",
             placeholder="Es. Istituto Comprensivo Alessandro Manzoni",
         ).strip()
-        localita_scuola_ricerca = st.text_input(
-            "Comune e provincia *",
-            placeholder="Es. Roma (RM)",
-        ).strip()
-        tipo_scuola_ricerca = st.selectbox(
-            "Tipologia (facoltativa)",
-            ["Non so", "Infanzia", "Primaria", "Secondaria di I grado", "Secondaria di II grado", "Istituto comprensivo", "Scuola paritaria", "Altro"],
+        regione_scuola_ricerca = st.selectbox(
+            "Regione di appartenenza *",
+            regioni_italia,
+            index=None,
+            placeholder="Seleziona la regione",
         )
         avvia_ricerca_scuola = st.form_submit_button(
             "🔎 Cerca codice e contatti", use_container_width=True
         )
 
     if avvia_ricerca_scuola:
-        if not nome_scuola_ricerca or not localita_scuola_ricerca:
-            st.warning("Inserisci il nome della scuola e il comune/provincia per avviare una ricerca più precisa.")
+        if not nome_scuola_ricerca or not regione_scuola_ricerca:
+            st.warning("Inserisci il nome della scuola e seleziona la regione.")
         else:
             api_key = st.secrets.get("GEMINI_API_KEY")
             if not api_key:
@@ -693,20 +707,18 @@ if strumento == "Ricerca dati della scuola":
                 prompt_scuola = f"""
 Cerca sul web una scuola italiana e restituisci i suoi dati identificativi.
 Nome indicato: {nome_scuola_ricerca}
-Comune/provincia: {localita_scuola_ricerca}
-Tipologia indicata: {tipo_scuola_ricerca}
+Regione: {regione_scuola_ricerca}
 
-OBIETTIVO: trovare il codice meccanografico della scuola partendo dal nome e dalla località, non fare la ricerca inversa.
+OBIETTIVO: trovare il codice meccanografico partendo dal nome della scuola e dalla regione, non fare la ricerca inversa.
 Cerca prioritariamente fonti ufficiali: sito ufficiale dell'istituto, portale MIM/Scuola in Chiaro e altri siti istituzionali.
-Restituisci una scheda in italiano con questi campi, in quest'ordine:
+Restituisci una scheda in italiano, ben leggibile, con questi campi in quest'ordine:
 1. Denominazione ufficiale completa
 2. Codice meccanografico (specifica a quale sede/plesso si riferisce; se esistono codici diversi, elencali separatamente)
-3. Indirizzo completo
-4. Telefono
-5. Email ordinaria
-6. PEC, se pubblica e reperibile
-7. Sito web ufficiale come link Markdown cliccabile
-8. Fonti consultate, con link Markdown cliccabili
+3. Via e numero civico
+4. Numero di telefono
+5. Email ordinaria e PEC se pubblica e reperibile
+6. Sito web ufficiale come link Markdown cliccabile, che si possa aprire con un clic
+7. Fonti consultate, con link Markdown cliccabili
 
 Non inventare né dedurre codici, numeri di telefono, indirizzi email o siti. Per ogni campo non trovato scrivi "Non trovato in una fonte affidabile". Se trovi più scuole compatibili, mostra le alternative e spiega come distinguerle, senza scegliere arbitrariamente. Distingui chiaramente i dati confermati da quelli non verificati. Non restituire soltanto link a ricerche Google: cerca pagine specifiche e link diretti alle fonti.
 """
@@ -977,4 +989,3 @@ else:
                         "Controlla la chiave API, la connessione e il nome del modello."
                     )
                     st.code(str(exc))
-
