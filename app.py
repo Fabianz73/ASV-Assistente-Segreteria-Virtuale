@@ -194,7 +194,7 @@ def cerca_scuole_nei_csv(righe, nome_scuola, regione, massimo=12):
 
 
 def mostra_schede_scuole(risultati):
-    """Mostra risultati in schede leggibili, raggruppate per comune, con sito cliccabile."""
+    """Mostra i risultati raggruppati in tendine per comune, con sito cliccabile."""
     gruppi = {}
     for scuola in risultati:
         comune = (scuola.get("comune") or "Comune non indicato").strip()
@@ -205,15 +205,9 @@ def mostra_schede_scuole(risultati):
         gruppi.items(), key=lambda item: (item[0][0].casefold(), item[0][1].casefold())
     ):
         titolo_comune = comune + (f" ({provincia})" if provincia else "")
-        with st.container(border=True):
-            st.markdown(
-                f"<div style='padding:2px 0 8px 0'>"
-                f"<span style='font-size:1.18rem;font-weight:800;color:#62548F'>📍 {titolo_comune}</span> "
-                f"<span style='color:#77727F;font-size:.9rem'>· {len(scuole)} {'scuola' if len(scuole) == 1 else 'scuole'}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-            # Due schede per riga quando possibile: si consultano più risultati senza allungare troppo la pagina.
+        titolo_tendina = f"📍 {titolo_comune} · {len(scuole)} {'scuola' if len(scuole) == 1 else 'scuole'}"
+        # Una tendina per ogni comune: Firenze, Arezzo ecc. restano separati e facili da consultare.
+        with st.expander(titolo_tendina, expanded=(len(gruppi) == 1)):
             for indice in range(0, len(scuole), 2):
                 colonne = st.columns(2, gap="medium")
                 for colonna, scuola in zip(colonne, scuole[indice:indice + 2]):
@@ -1320,3 +1314,4 @@ else:
                     else:
                         st.error("Si è verificato un problema durante la richiesta a Gemini. Verifica chiave API e modello.")
                         st.caption(dettaglio[:500])
+
