@@ -193,8 +193,22 @@ def cerca_scuole_nei_csv(righe, nome_scuola, regione, massimo=12):
     return unici
 
 
+def normalizza_url_scuola(url):
+    """Rende cliccabili gli URL dei CSV senza inventare il dominio della scuola."""
+    url = unescape(str(url or "")).strip().strip('"\'<>')
+    if not url or url.lower() in {"n.d.", "nd", "n/a", "na", "-", "non disponibile", "null"}:
+        return ""
+    url = re.sub(r"\s+", "", url)
+    if not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url.lstrip("/")
+    # Evita link malformati o schemi non web.
+    if not re.match(r"^https?://[^\s/]+(?:[^\s]*)?$", url, flags=re.IGNORECASE):
+        return ""
+    return url
+
+
 def mostra_schede_scuole(risultati):
-    """Mostra i risultati raggruppati in tendine per comune, con sito cliccabile."""
+    """Mostra i risultati raggruppati in tendine per comune, con una scuola per riga."""
     gruppi = {}
     for scuola in risultati:
         comune = (scuola.get("comune") or "Comune non indicato").strip()
@@ -206,65 +220,66 @@ def mostra_schede_scuole(risultati):
     ):
         titolo_comune = comune + (f" ({provincia})" if provincia else "")
         titolo_tendina = f"📍 {titolo_comune} · {len(scuole)} {'scuola' if len(scuole) == 1 else 'scuole'}"
-        # Una tendina per ogni comune: Firenze, Arezzo ecc. restano separati e facili da consultare.
         with st.expander(titolo_tendina, expanded=(len(gruppi) == 1)):
-            for indice in range(0, len(scuole), 2):
-                colonne = st.columns(2, gap="medium")
-                for colonna, scuola in zip(colonne, scuole[indice:indice + 2]):
-                    with colonna:
-                        with st.container(border=True):
-                            st.markdown(f"**🏫 {scuola['denominazione']}**")
-                            if scuola.get("tipo"):
-                                st.caption(scuola["tipo"])
-                            if scuola.get("codice"):
-                                st.markdown(
-                                    "<div style='font-size:.78rem;color:#77727F;margin-top:5px'>CODICE MECCANOGRAFICO</div>",
-                                    unsafe_allow_html=True,
-                                )
-                                st.code(scuola["codice"], language=None)
-                            else:
-                                st.caption("Codice meccanografico non presente nel CSV")
+            for scuola in scuole:
+                with st.container(border=True):
+                    st.markdown(f"**🏫 {scuola['denominazione']}**")
+                    if scuola.get("tipo"):
+                        st.caption(scuola["tipo"])
+                    codice = (scuola.get("codice") or "").strip()
+                    if codice:
+                        st.markdown(
+                            "<div style='font-size:.78rem;color:#77727F;margin-top:5px'>CODICE MECCANOGRAFICO</div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.code(codice, language=None)
+                    else:
+                        st.caption("Codice meccanografico non presente nel CSV")
 
-                            sito = (scuola.get("sito") or "").strip()
-                            if sito:
-                                if not sito.startswith(("http://", "https://")):
-                                    sito = "https://" + sito.lstrip("/")
-                                if re.match(r"^https?://[^\s]+$", sito, flags=re.IGNORECASE):
-                                    st.link_button("🌐 Apri il sito della scuola", sito, use_container_width=True)
-                                else:
-                                    st.caption("Indirizzo del sito non valido nel CSV")
-                            else:
-                                st.caption("🌐 Sito web non presente nell'archivio")
+                    sito = normalizza_url_scuola(scuola.get("sito"))
+                    if sito:
+                        # link_button apre l'indirizzo in una nuova scheda del browser
+                        # ed evita che il clic venga interpretato come una navigazione interna.
+                        st.link_button("🌐 Apri il sito della scuola", sito, help=sito)
+                    else:
+                        query_sito = " ".join(part for part in [
+                            scuola.get("denominazione", ""), comune, provincia, "sito ufficiale scuola"
+                        ] if part).strip()
+                        st.markdown(
+                            f"🌐 [Cerca il sito ufficiale della scuola](https://www.google.com/search?q={quote_plus(query_sito)})"
+                        )
+                        st.caption("Il sito non è indicato nell'archivio: il collegamento cerca il sito ufficiale, non è un indirizzo verificato.")
 
-                            with st.expander("📋 Indirizzo e contatti"):
-                                indirizzo = (scuola.get("indirizzo") or "").strip()
-                                cap = (scuola.get("cap") or "").strip()
-                                if cap:
-                                    indirizzo = f"{indirizzo}, {cap}" if indirizzo else cap
-                                if comune != "Comune non indicato":
-                                    indirizzo = f"{indirizzo} · {comune}" if indirizzo else comune
-                                if provincia:
-                                    indirizzo = f"{indirizzo} ({provincia})" if indirizzo else provincia
-                                st.write(f"**Indirizzo:** {indirizzo or 'Non presente nel CSV'}")
-                                telefono = (scuola.get("telefono") or "").strip()
-                                email = (scuola.get("email") or "").strip()
-                                pec = (scuola.get("pec") or "").strip()
-                                if telefono:
-                                    st.markdown(f"**Telefono:** [{telefono}](tel:{telefono})")
-                                else:
-                                    st.write("**Telefono:** Non presente nel CSV")
-                                if email:
-                                    st.markdown(f"**Email:** [{email}](mailto:{email})")
-                                else:
-                                    st.write("**Email:** Non presente nel CSV")
-                                if pec:
-                                    st.markdown(f"**PEC:** [{pec}](mailto:{pec})")
-                                else:
-                                    st.write("**PEC:** Non presente nel CSV")
-                                st.caption(
-                                    f"Fonte: {scuola.get('origine', 'archivio CSV')} · Anagrafica scolastica 2026/2027. "
-                                    "I campi mancanti non sono stati dedotti."
-                                )
+                    with st.expander("📋 Indirizzo e contatti"):
+                        indirizzo = (scuola.get("indirizzo") or "").strip()
+                        cap = (scuola.get("cap") or "").strip()
+                        if cap:
+                            indirizzo = f"{indirizzo}, {cap}" if indirizzo else cap
+                        if comune != "Comune non indicato":
+                            indirizzo = f"{indirizzo} · {comune}" if indirizzo else comune
+                        if provincia:
+                            indirizzo = f"{indirizzo} ({provincia})" if indirizzo else provincia
+                        st.write(f"**Indirizzo:** {indirizzo or 'Non presente nel CSV'}")
+                        telefono = (scuola.get("telefono") or "").strip()
+                        email = (scuola.get("email") or "").strip()
+                        pec = (scuola.get("pec") or "").strip()
+                        if telefono:
+                            telefono_link = re.sub(r"[^0-9+*#]", "", telefono)
+                            st.markdown(f"**Telefono:** [ {telefono} ](tel:{telefono_link})")
+                        else:
+                            st.write("**Telefono:** Non presente nel CSV")
+                        if email:
+                            st.markdown(f"**Email:** [{email}](mailto:{email})")
+                        else:
+                            st.write("**Email:** Non presente nel CSV")
+                        if pec:
+                            st.markdown(f"**PEC:** [{pec}](mailto:{pec})")
+                        else:
+                            st.write("**PEC:** Non presente nel CSV")
+                        st.caption(
+                            f"Fonte: {scuola.get('origine', 'archivio CSV')} · Anagrafica scolastica 2026/2027. "
+                            "I campi mancanti non sono stati dedotti."
+                        )
 
 
 @st.cache_resource
