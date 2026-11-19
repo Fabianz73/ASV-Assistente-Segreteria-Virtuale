@@ -492,8 +492,8 @@ elif strumento == "Cerca codici meccanografici":
                         email = s.get("INDIRIZZOEMAILSCUOLA", "")
                         pec = s.get("INDIRIZZOPECSCUOLA", "")
                         indirizzo = s.get("INDIRIZZOSCUOLA", "")
-                        # Apriamo direttamente una ricerca Google mirata: evita link diretti
-                        # obsoleti o malformati presenti in alcuni archivi scolastici.
+                        # Usa il sito ufficiale se presente nei dati; Google resta come alternativa.
+                        sito_scuola = trova_sito_scuola(s)
                         query_google = quote_plus(f'"{denominazione}" "{comune}" "{codice}" sito ufficiale scuola')
                         link_google = f"https://www.google.com/search?q={query_google}"
                         
@@ -505,15 +505,23 @@ elif strumento == "Cerca codici meccanografici":
                             if pec and str(pec).strip().lower() not in {"nan", "none", ""}:
                                 st.write(f"**PEC:** {pec}")
                             st.divider()
+                            if sito_scuola:
+                                st.link_button(
+                                    "🌐 Apri il sito web della scuola",
+                                    sito_scuola,
+                                    use_container_width=True,
+                                    help="Apre il sito web indicato nei dati della scuola."
+                                )
+                            else:
+                                st.info("Il sito diretto non è presente nei dati disponibili. Puoi cercarlo con il pulsante qui sotto.")
                             st.link_button(
-                                "🌐 Trova il sito ufficiale su Google",
+                                "🔎 Cerca il sito della scuola su Google",
                                 link_google,
                                 use_container_width=True,
-                                help="Apre Google in una nuova scheda con una ricerca mirata per questa scuola."
+                                help="Apre Google con il nome, il comune e il codice meccanografico della scuola."
                             )
-                            st.caption("Seleziona il risultato che riporta il sito ufficiale dell'istituto e verifica che nome e comune corrispondano.")
                 
-                st.caption("Fonte dei dati anagrafici: Open Data del Ministero dell'Istruzione e del Merito. I siti web sono mostrati solo se presenti nel CSV; la ricerca Google è un'alternativa e non costituisce una verifica automatica.")
+                st.caption("Fonte dei dati anagrafici: Open Data del Ministero dell'Istruzione e del Merito. Quando il dataset contiene il sito web, puoi aprirlo direttamente; altrimenti puoi cercarlo su Google e verificare che sia quello ufficiale.")
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
         with st.chat_message(messaggio["role"]):
