@@ -338,13 +338,19 @@ if "modulo_testo_editabile" not in st.session_state:
 if "modulo_guidato_pronto" not in st.session_state:
     st.session_state["modulo_guidato_pronto"] = False
 
+if st.session_state.pop("vai_ricerca_meccanografica", False):
+    st.session_state["strumento_avs"] = "Cerca codici meccanografici"
+
 with st.sidebar:
     st.header("🧰 Strumenti AVS")
     strumento = st.radio("Che cosa vuoi fare?", ["Assistente segreteria", "Crea modulo PDF compilabile", "Cerca codici meccanografici"], key="strumento_avs")
     st.divider()
     if strumento == "Assistente segreteria":
         st.header("⚡ Azioni rapide")
-        st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
+        st.markdown("Seleziona una procedura frequente oppure cerca una scuola per nome.")
+        if st.button("🔎 Cerca codici meccanografici per nome scuola", use_container_width=True, key="btn_ricerca_meccanografica_sidebar"):
+            st.session_state["vai_ricerca_meccanografica"] = True
+            st.rerun()
         contesto = "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre per i dati mancanti. "
         istr = "Non inventare dati ufficiali della scuola e non dichiarare di averli verificati online. Per ogni dato dell'istituto non fornito dall'utente, usa un segnaposto tra parentesi quadre e indica cosa va verificato prima dell'uso. "
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
