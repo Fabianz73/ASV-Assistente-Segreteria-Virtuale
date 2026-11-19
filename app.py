@@ -13,34 +13,28 @@ st.set_page_config(page_title="AVS - Assistente Virtuale Scolastico", page_icon=
 MODEL_NAME = "gemini-2.5-flash"
 
 SIGLE_PROVINCE = {
-    "AG": "AGRIGENTO", "AL": "ALESSANDRIA", "AN": "ANCONA", "AO": "AOSTA",
-    "AP": "ASCOLI PICENO", "AQ": "L'AQUILA", "AR": "AREZZO", "AT": "ASTI",
-    "AV": "AVELLINO", "BA": "BARI", "BG": "BERGAMO", "BI": "BIELLA",
-    "BL": "BELLUNO", "BN": "BENEVENTO", "BO": "BOLOGNA", "BR": "BRINDISI",
-    "BS": "BRESCIA", "BT": "BARLETTA-ANDRIA-TRANI", "BZ": "BOLZANO",
-    "CA": "CAGLIARI", "CB": "CAMPOBASSO", "CE": "CASERTA", "CH": "CHIETI",
-    "CL": "CALTANISSETTA", "CN": "CUNEO", "CO": "COMO", "CR": "CREMONA",
-    "CS": "COSENZA", "CT": "CATANIA", "CZ": "CATANZARO", "EN": "ENNA",
-    "FC": "FORLI'-CESENA", "FE": "FERRARA", "FG": "FOGGIA", "FI": "FIRENZE",
-    "FM": "FERMO", "FR": "FROSINONE", "GE": "GENOVA", "GO": "GORIZIA",
-    "GR": "GROSSETO", "IM": "IMPERIA", "IS": "ISERNIA", "KR": "CROTONE",
-    "LC": "LECCO", "LE": "LECCE", "LI": "LIVORNO", "LO": "LODI",
-    "LT": "LATINA", "LU": "LUCCA", "MB": "MONZA E DELLA BRIANZA",
-    "MC": "MACERATA", "ME": "MESSINA", "MI": "MILANO", "MN": "MANTOVA",
-    "MO": "MODENA", "MS": "MASSA-CARRARA", "MT": "MATERA", "NA": "NAPOLI",
-    "NO": "NOVARA", "NU": "NUORO", "OR": "ORISTANO", "PA": "PALERMO",
-    "PC": "PIACENZA", "PD": "PADOVA", "PE": "PESCARA", "PG": "PERUGIA",
-    "PI": "PISA", "PN": "PORDENONE", "PO": "PRATO", "PR": "PARMA",
-    "PT": "PISTOIA", "PU": "PESARO E URBINO", "PV": "PAVIA", "PZ": "POTENZA",
-    "RA": "RAVENNA", "RC": "REGGIO DI CALABRIA", "RE": "REGGIO NELL'EMILIA",
-    "RG": "RAGUSA", "RI": "RIETI", "RM": "ROMA", "RN": "RIMINI",
-    "RO": "ROVIGO", "SA": "SALERNO", "SI": "SIENA", "SO": "SONDRIO",
-    "SP": "LA SPEZIA", "SR": "SIRACUSA", "SS": "SASSARI", "SU": "SUD SARDEGNA",
-    "SV": "SAVONA", "TA": "TARANTO", "TE": "TERAMO", "TN": "TRENTO",
-    "TO": "TORINO", "TP": "TRAPANI", "TR": "TERNI", "TS": "TRIESTE",
-    "TV": "TREVISO", "UD": "UDINE", "VA": "VARESE", "VB": "VERBANO-CUSIO-OSSOLA",
-    "VC": "VERCELLI", "VE": "VENEZIA", "VI": "VICENZA", "VR": "VERONA",
-    "VT": "VITERBO", "VV": "VIBO VALENTIA",
+    "AG": "AGRIGENTO", "AL": "ALESSANDRIA", "AN": "ANCONA", "AO": "AOSTA", "AR": "AREZZO",
+    "AP": "ASCOLI PICENO", "AT": "ASTI", "AV": "AVELLINO", "BA": "BARI", "BT": "BARLETTA-ANDRIA-TRANI",
+    "BL": "BELLUNO", "BN": "BENEVENTO", "BG": "BERGAMO", "BI": "BIELLA", "BO": "BOLOGNA",
+    "BZ": "BOLZANO", "BS": "BRESCIA", "BR": "BRINDISI", "CA": "CAGLIARI", "CL": "CALTANISSETTA",
+    "CB": "CAMPOBASSO", "CE": "CASERTA", "CT": "CATANIA", "CZ": "CATANZARO", "CH": "CHIETI",
+    "CO": "COMO", "CS": "COSENZA", "CR": "CREMONA", "KR": "CROTONE", "CN": "CUNEO",
+    "EN": "ENNA", "FM": "FERMO", "FE": "FERRARA", "FI": "FIRENZE", "FG": "FOGGIA",
+    "FC": "FORLI'-CESENA", "FR": "FROSINONE", "GE": "GENOVA", "GO": "GORIZIA", "GR": "GROSSETO",
+    "IM": "IMPERIA", "IS": "ISERNIA", "AQ": "L'AQUILA", "SP": "LA SPEZIA", "LT": "LATINA",
+    "LE": "LECCE", "LC": "LECCO", "LI": "LIVORNO", "LO": "LODI", "LU": "LUCCA",
+    "MC": "MACERATA", "MN": "MANTOVA", "MS": "MASSA-CARRARA", "MT": "MATERA", "ME": "MESSINA",
+    "MI": "MILANO", "MO": "MODENA", "MB": "MONZA E BRIANZA", "NA": "NAPOLI", "NO": "NOVARA",
+    "NU": "NUORO", "OR": "ORISTANO", "PD": "PADOVA", "PA": "PALERMO", "PR": "PARMA",
+    "PV": "PAVIA", "PG": "PERUGIA", "PU": "PESARO E URBINO", "PE": "PESCARA", "PC": "PIACENZA",
+    "PI": "PISA", "PT": "PISTOIA", "PN": "PORDENONE", "PZ": "POTENZA", "PO": "PRATO",
+    "RG": "RAGUSA", "RA": "RAVENNA", "RC": "REGGIO CALABRIA", "RE": "REGGIO EMILIA", "RI": "RIETI",
+    "RN": "RIMINI", "RM": "ROMA", "RO": "ROVIGO", "SA": "SALERNO", "SS": "SASSARI",
+    "SV": "SAVONA", "SI": "SIENA", "SR": "SIRACUSA", "SO": "SONDRIO", "SU": "SUD SARDEGNA",
+    "TA": "TARANTO", "TE": "TERAMO", "TR": "TERNI", "TO": "TORINO", "TP": "TRAPANI",
+    "TN": "TRENTO", "TV": "TREVISO", "TS": "TRIESTE", "UD": "UDINE", "VA": "VARESE",
+    "VE": "VENEZIA", "VB": "VERBANO-CUSIO-OSSOLA", "VC": "VERCELLI", "VR": "VERONA",
+    "VV": "VIBO VALENTIA", "VI": "VICENZA", "VT": "VITERBO",
 }
 
 @st.cache_resource
@@ -254,8 +248,7 @@ def carica_dati_scuole():
                     raise ValueError
             except Exception:
                 df = pd.read_csv(file_path, encoding="latin-1", sep=";")
-            df.columns = [str(c).strip() for c in df.columns]
-            for col in ["REGIONE", "PROVINCIA", "DESCRIZIONECOMUNE", "DENOMINAZIONESCUOLA", "CODICESCUOLA"]:
+            for col in ["DENOMINAZIONESCUOLA", "DESCRIZIONECOMUNE", "CODICESCUOLA", "REGIONE", "PROVINCIA"]:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.strip()
             df["TIPO_GESTIONE_AVS"] = tipo_gestione
@@ -285,11 +278,10 @@ def cerca_scuole(query, regione=None, provincia=None, solo_paritarie=False, limi
         df = df[df["REGIONE"].str.upper() == regione.strip().upper()]
 
     if provincia and provincia.strip():
-        p = provincia.strip().upper()
-        p_estesa = SIGLE_PROVINCE.get(p, p)
-        m_prov = df["PROVINCIA"].str.upper().str.contains(p_estesa, na=False, regex=False)
-        m_cod_prov = df["CODICESCUOLA"].str.upper().str.startswith(p) if len(p) == 2 else False
-        df = df[m_prov | m_cod_prov]
+        p_in = provincia.strip().upper()
+        p_estesa = SIGLE_PROVINCE.get(p_in, p_in)
+        prov_col = df["PROVINCIA"].str.upper()
+        df = df[(prov_col == p_in) | (prov_col == p_estesa) | prov_col.str.contains(p_estesa, na=False, regex=False)]
 
     if solo_paritarie:
         df = df[df["TIPO_GESTIONE_AVS"] == "PARITARIA"]
@@ -339,11 +331,7 @@ def formatta_e_mostra(testo, indice_msg):
     testo_modulo = None
     if m_modulo:
         testo_modulo = m_modulo.group(1).strip()
-        testo_pulito = testo_pulito.replace(m_modulo.group(0), "
-
-**📄 Modulo generato e pronto per il download qui sotto.**
-
-")
+        testo_pulito = testo_pulito.replace(m_modulo.group(0), "\n\n**📄 Modulo generato e pronto per il download qui sotto.**\n\n")
     m_diretta = re.search(r"\[DIRETTA\](.*?)\[/DIRETTA\]", testo_pulito, re.DOTALL | re.IGNORECASE)
     diretta_html = ""
     if m_diretta:
@@ -375,85 +363,97 @@ def formatta_e_mostra(testo, indice_msg):
 st.title("🏫 AVS Office")
 st.caption("Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria")
 
-if "anim_run_id" not in st.session_state:
-    st.session_state["anim_run_id"] = 1
+if "anim_seed" not in st.session_state:
+    st.session_state["anim_seed"] = 0
 
-banner_html = f"""
+hero_iframe = f"""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'Nunito Sans', sans-serif; background: transparent; overflow: hidden; }}
+  body {{
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: 'Nunito Sans', sans-serif;
+  }}
   .hero {{
     position: relative;
     overflow: hidden;
     background: linear-gradient(115deg, #F0EBFA 0%, #F8F5FB 54%, #EAF4EF 100%);
     border: 1px solid #E6E0EA;
     border-radius: 18px;
-    padding: 17px 22px 26px 22px;
-    width: 100%;
+    padding: 16px 22px 28px 22px;
+    box-sizing: border-box;
   }}
-  .hero::after {{
-    content: "✦   ·   ♡";
+  .decor {{
     position: absolute;
     right: 18px;
     top: 12px;
     color: rgba(98, 84, 143, 0.25);
-    font-size: 1.05rem;
+    font-size: 16px;
     letter-spacing: 7px;
     pointer-events: none;
   }}
-  .title {{ font-size: 1.08rem; font-weight: 800; color: #40384F; }}
-  .sub {{ font-size: 0.92rem; color: #716B79; margin-top: 4px; padding-right: 110px; }}
-  .chase {{
+  .title {{
+    font-size: 17px;
+    font-weight: 800;
+    color: #40384F;
+  }}
+  .sub {{
+    font-size: 14.5px;
+    color: #716B79;
+    margin-top: 4px;
+    padding-right: 110px;
+  }}
+  .track {{
     position: absolute;
+    left: 16px;
     right: 16px;
-    bottom: 6px;
-    width: 240px;
-    height: 30px;
+    bottom: 4px;
+    height: 26px;
     pointer-events: none;
-    user-select: none;
   }}
   .mouse, .cat {{
     position: absolute;
     bottom: 0;
-    display: inline-block;
     line-height: 1;
+    will-change: transform, opacity;
   }}
   .mouse {{
-    right: 10px;
-    font-size: 18px;
-    animation: mouse-run-{st.session_state["anim_run_id"]} 3.8s ease-in-out 0.2s forwards;
+    right: 0;
+    font-size: 17px;
+    animation: run-mouse 4.2s ease-in-out 0.2s infinite;
   }}
   .cat {{
-    right: 38px;
-    font-size: 24px;
-    animation: cat-run-{st.session_state["anim_run_id"]} 3.8s ease-in-out 0.35s forwards;
+    right: 32px;
+    font-size: 22px;
+    animation: run-cat 4.2s ease-in-out 0.35s infinite;
   }}
-  @keyframes mouse-run-{st.session_state["anim_run_id"]} {{
-    0% {{ transform: translateX(0) translateY(0); opacity: 0; }}
+  @keyframes run-mouse {{
+    0% {{ transform: translateX(30px) translateY(0); opacity: 0; }}
     10% {{ opacity: 1; }}
-    45% {{ transform: translateX(-110px) translateY(-4px); opacity: 1; }}
-    75% {{ transform: translateX(-180px) translateY(0); opacity: 0.9; }}
-    100% {{ transform: translateX(-230px) translateY(0); opacity: 0; }}
+    45% {{ transform: translateX(-180px) translateY(-3px); opacity: 1; }}
+    80% {{ transform: translateX(-340px) translateY(0); opacity: 1; }}
+    100% {{ transform: translateX(-420px) translateY(0); opacity: 0; }}
   }}
-  @keyframes cat-run-{st.session_state["anim_run_id"]} {{
-    0% {{ transform: translateX(0) translateY(0); opacity: 0; }}
+  @keyframes run-cat {{
+    0% {{ transform: translateX(30px) translateY(0); opacity: 0; }}
     10% {{ opacity: 1; }}
-    45% {{ transform: translateX(-100px) translateY(-5px); opacity: 1; }}
-    75% {{ transform: translateX(-170px) translateY(0); opacity: 0.9; }}
-    100% {{ transform: translateX(-220px) translateY(0); opacity: 0; }}
+    45% {{ transform: translateX(-165px) translateY(-4px); opacity: 1; }}
+    80% {{ transform: translateX(-320px) translateY(0); opacity: 1; }}
+    100% {{ transform: translateX(-400px) translateY(0); opacity: 0; }}
   }}
 </style>
 </head>
 <body>
-  <div class="hero">
+  <div class="hero" data-seed="{st.session_state['anim_seed']}">
+    <div class="decor">✦ · ♡</div>
     <div class="title">La tua segreteria, un po’ più semplice ✨</div>
     <div class="sub">Procedure, risposte operative e moduli compilabili in un unico spazio.</div>
-    <div class="chase">
+    <div class="track">
       <span class="mouse">🐭</span>
       <span class="cat">🐈</span>
     </div>
@@ -461,7 +461,7 @@ banner_html = f"""
 </body>
 </html>
 """
-components.html(banner_html, height=104)
+components.html(hero_iframe, height=106)
 
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
@@ -507,10 +507,6 @@ with st.sidebar:
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
-    st.divider()
-    if st.button("🐈 Rivedi pausa felina", use_container_width=True):
-        st.session_state["anim_run_id"] += 1
-        st.rerun()
 
 if strumento == "Crea modulo PDF compilabile":
     st.subheader("📄 Crea un modulo PDF compilabile")
@@ -595,7 +591,7 @@ elif strumento == "Cerca codici meccanografici":
     st.write("Cerca per nome scuola, comune o codice meccanografico. I dati provengono dal dataset ufficiale del Ministero.")
     col1, col2, col3 = st.columns([2, 1.5, 1])
     with col1:
-        query_scuola = st.text_input("Nome scuola, comune o codice", placeholder="Es. Ghiberti, Firenze, FIIC8...")
+        query_scuola = st.text_input("Nome scuola, comune o codice", placeholder="Es. Ghiberti, Firenze, FIIS...")
     with col2:
         regioni = {
             "Tutte": None,
