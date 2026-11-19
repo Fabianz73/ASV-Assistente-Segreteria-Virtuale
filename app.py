@@ -605,6 +605,49 @@ with st.sidebar:
             "e indica cosa va verificato prima dell'uso. "
         )
 
+        # Ricerca dedicata dei dati identificativi della scuola e del codice meccanografico.
+        with st.expander("🔎 Ricerca dati della scuola / codice meccanografico", expanded=False):
+            nome_scuola_ricerca = st.text_input(
+                "Nome dell'istituto",
+                key="avs_ricerca_nome_scuola",
+                placeholder="Es. I.C. Alessandro Manzoni",
+            ).strip()
+            codice_scuola_ricerca = st.text_input(
+                "Codice meccanografico (se lo conosci)",
+                key="avs_ricerca_codice_scuola",
+                placeholder="Es. RMIC000000",
+            ).strip().upper()
+            localita_scuola_ricerca = st.text_input(
+                "Comune / provincia (consigliato)",
+                key="avs_ricerca_localita_scuola",
+                placeholder="Es. Roma (RM)",
+            ).strip()
+            st.caption(
+                "La ricerca usa fonti pubbliche. Controlla i dati e i collegamenti prima di inserirli in atti ufficiali."
+            )
+            if st.button("Cerca scuola e codice", key="avs_avvia_ricerca_scuola", use_container_width=True):
+                if not (nome_scuola_ricerca or codice_scuola_ricerca):
+                    st.warning("Inserisci il nome della scuola oppure il codice meccanografico.")
+                else:
+                    dettagli_ricerca = []
+                    if nome_scuola_ricerca:
+                        dettagli_ricerca.append(f"Nome scuola: {nome_scuola_ricerca}.")
+                    if codice_scuola_ricerca:
+                        dettagli_ricerca.append(f"Codice meccanografico da verificare: {codice_scuola_ricerca}.")
+                    if localita_scuola_ricerca:
+                        dettagli_ricerca.append(f"Comune/provincia: {localita_scuola_ricerca}.")
+                    st.session_state["prompt_rapido"] = (
+                        "Esegui una ricerca web per identificare la scuola e verificare il codice meccanografico. "
+                        + " ".join(dettagli_ricerca)
+                        + " Cerca prioritariamente fonti ufficiali: sito della scuola, MIM/Scuola in Chiaro e altri siti istituzionali. "
+                        "Mostra una scheda con denominazione completa, tipologia, codice meccanografico, località, sito ufficiale e contatti pubblici se disponibili. "
+                        "Inserisci link Markdown cliccabili alle pagine effettivamente consultate, in modo che si possano aprire direttamente. "
+                        "Distingui i dati confermati da quelli non verificati; se ci sono scuole omonime, segnala l'ambiguità. "
+                        "Non inventare dati o link. Concludi indicando cosa verificare manualmente prima di usare i dati in documenti ufficiali."
+                    )
+                    st.session_state["ricerca_web_azione_rapida"] = True
+                    st.rerun()
+
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
             st.session_state["prompt_rapido"] = (
                 f"{contesto_scuola} {istruzioni_istituto} "
@@ -884,4 +927,3 @@ else:
                         "Controlla la chiave API, la connessione e il nome del modello."
                     )
                     st.code(str(exc))
-
