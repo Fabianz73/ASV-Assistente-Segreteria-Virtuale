@@ -1,4 +1,4 @@
-import hashlib, io, re, unicodedata
+import hashlib, io, os, re, unicodedata
 from urllib.parse import quote_plus
 import pandas as pd
 import streamlit as st
@@ -7,21 +7,20 @@ from google.genai import types
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import os
- 
+
 st.set_page_config(page_title="AVS - Assistente Virtuale Scolastico", page_icon="🏫", layout="wide")
-MODEL_NAME = "gemini-2.0-flash"  # verificare che il modello sia disponibile nel proprio account
- 
+MODEL_NAME = "gemini-2.5-flash"
+
 @st.cache_resource
 def get_gemini_client(api_key):
     return genai.Client(api_key=api_key)
- 
+
 def get_api_key():
     try:
         return st.secrets["GEMINI_API_KEY"]
     except (KeyError, FileNotFoundError):
-        return None
- 
+        return os.getenv("GEMINI_API_KEY")
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800;900&display=swap');
@@ -48,21 +47,35 @@ p,label,li,.stMarkdown,.stCaption{font-family:'Nunito Sans',sans-serif}
 [data-testid="stAlert"]{border-radius:14px}
 .trappola-box{background:#FFF0ED;border-left:5px solid #C96D61;padding:15px 17px;border-radius:12px;margin:15px 0;color:#843E37;font-weight:700;font-size:1.02em}
 .risposta-diretta{background:var(--sagep);border-left:5px solid var(--sage);padding:15px 17px;border-radius:12px;margin-top:20px;color:#285B49;font-weight:700;font-size:1.02em}
-.avs-hero{position:relative;overflow:hidden;isolation:isolate}
-.avs-hero::after{content:"✦   ·   ♡";position:absolute;right:18px;top:12px;color:rgba(98,84,143,.20);font-size:1.05rem;letter-spacing:7px;pointer-events:none;z-index:-1}
-.avs-cat-chase{position:absolute;right:13px;bottom:9px;width:145px;height:32px;pointer-events:none;user-select:none;opacity:.88}
-.avs-cat-chase .avs-mouse,.avs-cat-chase .avs-cat{position:absolute;bottom:0;display:inline-block;line-height:1;filter:saturate(.78);will-change:transform,opacity}
-.avs-cat-chase .avs-mouse{right:7px;font-size:17px;animation:avs-mouse-run 2.7s ease-in-out .15s 1 both}
-.avs-cat-chase .avs-cat{right:24px;font-size:23px;animation:avs-cat-run 2.7s ease-in-out 1 both}
-@keyframes avs-mouse-run{0%{transform:translateX(0);opacity:0}8%{opacity:.82}55%{transform:translateX(-100px) translateY(-2px);opacity:.82}76%{transform:translateX(-118px) translateY(0);opacity:.7}100%{transform:translateX(-145px);opacity:0}}
-@keyframes avs-cat-run{0%{transform:translateX(0);opacity:0}10%{opacity:.9}54%{transform:translateX(-90px) translateY(-3px);opacity:.9}76%{transform:translateX(-111px) translateY(0);opacity:.78}100%{transform:translateX(-142px);opacity:0}}
-@media (prefers-reduced-motion:reduce){.avs-cat-chase{display:none!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+.avs-hero{position:relative;overflow:hidden;background:linear-gradient(115deg,#F0EBFA 0%,#F8F5FB 54%,#EAF4EF 100%);border:1px solid #E6E0EA;border-radius:18px;padding:17px 22px 26px 22px;margin:8px 0 22px 0}
+.avs-hero-title{font-size:1.08rem;font-weight:800;color:#40384F}
+.avs-hero-sub{font-size:0.92rem;color:#716B79;margin-top:4px;padding-right:110px}
+.avs-hero::after{content:"✦   ·   ♡";position:absolute;right:18px;top:12px;color:rgba(98,84,143,.20);font-size:1.05rem;letter-spacing:7px;pointer-events:none}
+.avs-cat-chase{position:absolute;right:16px;bottom:6px;width:180px;height:30px;pointer-events:none;user-select:none}
+.avs-mouse,.avs-cat{position:absolute;bottom:0;display:inline-block;line-height:1}
+.avs-mouse{right:8px;font-size:17px;animation:avs-mouse-run 3.4s ease-in-out 0.3s forwards}
+.avs-cat{right:34px;font-size:23px;animation:avs-cat-run 3.4s ease-in-out 0.45s forwards}
+@keyframes avs-mouse-run{
+  0%{transform:translateX(0) translateY(0);opacity:0}
+  12%{opacity:1}
+  45%{transform:translateX(-85px) translateY(-3px);opacity:1}
+  75%{transform:translateX(-135px) translateY(0);opacity:0.9}
+  100%{transform:translateX(-175px) translateY(0);opacity:0}
+}
+@keyframes avs-cat-run{
+  0%{transform:translateX(0) translateY(0);opacity:0}
+  12%{opacity:1}
+  45%{transform:translateX(-75px) translateY(-4px);opacity:1}
+  75%{transform:translateX(-125px) translateY(0);opacity:0.9}
+  100%{transform:translateX(-165px) translateY(0);opacity:0}
+}
+@media (prefers-reduced-motion:reduce){.avs-cat-chase{display:none!important}}
 [data-testid="stRadio"] label{border-radius:10px}
 hr{border-color:var(--border)}
-@media (max-width:768px){.avs-cat-chase{right:8px;bottom:5px;transform:scale(.82);transform-origin:bottom right}h1{font-size:1.8rem!important}[data-testid="stChatMessage"]{padding:.8rem}}
+@media (max-width:768px){.avs-cat-chase{right:8px;bottom:4px;transform:scale(.82);transform-origin:bottom right}h1{font-size:1.8rem!important}[data-testid="stChatMessage"]{padding:.8rem}}
 </style>
 """, unsafe_allow_html=True)
- 
+
 SYSTEM_PROMPT = """
 Sei AVS, Assistente Virtuale Scolastico per le segreterie scolastiche italiane.
 Rispondi in italiano, in modo pratico, chiaro e conciso.
@@ -83,24 +96,25 @@ FORMATO:
 - Non creare un modulo PDF se non è richiesto.
 - Evita ripetizioni, spiegazioni lunghe e linguaggio burocratico superfluo.
 """
- 
+
 def nome_campo_sicuro(testo, indice):
     t = unicodedata.normalize("NFKD", testo).encode("ascii", "ignore").decode("ascii")
     t = re.sub(r"[^A-Za-z0-9_]+", "_", t).strip("_")
     return f"campo_{indice}_{t[:24] or 'testo'}"
- 
+
 def normalizza_url(url):
-    """Restituisce un URL cliccabile valido, oppure None se il campo è vuoto/non valido."""
     if not isinstance(url, str):
         return None
     u = url.strip().split(";")[0].strip()
-    if not u or u.lower() in {"nan", "none", "-", "n.d.", "nd"}:
+    if not u or u.lower() in {"nan", "none", "null", "-", "n.d.", "nd"}:
         return None
     if not re.match(r"^https?://", u, re.IGNORECASE):
         u = "https://" + u
-    return u
- 
-def crea_pdf_editabile(testo_modulo):
+    if re.match(r"^https?://[^\s]+$", u, re.IGNORECASE):
+        return u
+    return None
+
+def crea_pdf_editabile(testo_modulo, intestazione_istituto="ISTITUTO SCOLASTICO - SEGRETERIA AMMINISTRATIVA"):
     if not testo_modulo or not testo_modulo.strip():
         raise ValueError("Il testo del modulo è vuoto.")
     buffer = io.BytesIO()
@@ -110,19 +124,20 @@ def crea_pdf_editabile(testo_modulo):
     lt = larghezza - ms - md
     y = altezza - 82
     num = 0
- 
+    titolo_header = (intestazione_istituto or "ISTITUTO SCOLASTICO - SEGRETERIA AMMINISTRATIVA").strip().upper()[:85]
+
     def intestazione():
-        pdf.setFont("Helvetica-Bold", 10)
-        pdf.drawString(ms, altezza - 40, "ISTITUTO SCOLASTICO STATALE - SEGRETERIA AMMINISTRATIVA")
+        pdf.setFont("Helvetica-Bold", 9.5)
+        pdf.drawString(ms, altezza - 40, titolo_header)
         pdf.setStrokeColor(colors.grey)
         pdf.line(ms, altezza - 50, larghezza - md, altezza - 50)
- 
+
     def nuova_pagina():
         nonlocal y
         pdf.showPage()
         intestazione()
         y = altezza - 72
- 
+
     def disegna(testo, font="Helvetica", dim=10):
         nonlocal y
         linea = ""
@@ -144,7 +159,7 @@ def crea_pdf_editabile(testo_modulo):
             y -= 17
             if y < 65:
                 nuova_pagina()
- 
+
     intestazione()
     for i, riga_orig in enumerate(testo_modulo.strip().splitlines()):
         riga = riga_orig.strip()
@@ -185,7 +200,22 @@ def crea_pdf_editabile(testo_modulo):
                 if y < 75:
                     nuova_pagina()
                 num += 1
-                pdf.acroForm.textfield(name=nome_campo_sicuro(etichetta, num), tooltip=etichetta, x=ms, y=y - 3, width=lt, height=20, borderStyle="underlined", borderWidth=1, borderColor=colors.darkblue, fillColor=colors.Color(.97, .98, 1), textColor=colors.black, forceBorder=True, fontName="Helvetica", fontSize=10)
+                pdf.acroForm.textfield(
+                    name=nome_campo_sicuro(etichetta, num),
+                    tooltip=etichetta,
+                    x=ms,
+                    y=y - 3,
+                    width=lt,
+                    height=20,
+                    borderStyle="underlined",
+                    borderWidth=1,
+                    borderColor=colors.darkblue,
+                    fillColor=colors.Color(.97, .98, 1),
+                    textColor=colors.black,
+                    forceBorder=True,
+                    fontName="Helvetica",
+                    fontSize=10,
+                )
                 y -= 29
                 if y < 65:
                     nuova_pagina()
@@ -196,63 +226,91 @@ def crea_pdf_editabile(testo_modulo):
     pdf.save()
     buffer.seek(0)
     return buffer.getvalue()
- 
+
 @st.cache_data
 def carica_dati_scuole():
-    """Carica e unisce i dati delle scuole statali e paritarie dai file CSV."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
- 
-    file_statali = os.path.join(script_dir, "SCUANAGRAFESTAT20262720260901.csv")
-    file_paritarie = os.path.join(script_dir, "SCUANAGRAFEPAR20262720260901.csv")
- 
+    file_sorgenti = [
+        (os.path.join(script_dir, "SCUANAGRAFESTAT20262720260901.csv"), "STATALE"),
+        (os.path.join(script_dir, "SCUANAGRAFEPAR20262720260901.csv"), "PARITARIA"),
+    ]
     dfs = []
-    for file_path in [file_statali, file_paritarie]:
+    for file_path, tipo_gestione in file_sorgenti:
         if not os.path.exists(file_path):
             continue
         try:
             try:
-                df = pd.read_csv(file_path, encoding='latin-1', sep=',')
+                df = pd.read_csv(file_path, encoding="latin-1", sep=",")
                 if len(df.columns) == 1:
                     raise ValueError
             except Exception:
-                df = pd.read_csv(file_path, encoding='latin-1', sep=';')
+                df = pd.read_csv(file_path, encoding="latin-1", sep=";")
+            df["TIPO_GESTIONE_AVS"] = tipo_gestione
             dfs.append(df)
         except Exception as e:
             st.warning(f"Impossibile leggere {file_path}: {e}")
- 
+
     if not dfs:
         st.error("Nessun file CSV trovato. Carica i file su GitHub.")
         return None
- 
-    df_totale = pd.concat(dfs, ignore_index=True)
-    return df_totale
- 
-def cerca_scuole(query, regione=None, solo_paritarie=False):
-    """Cerca scuole nei dati locali."""
+
+    return pd.concat(dfs, ignore_index=True)
+
+def cerca_scuole(query, regione=None, provincia=None, solo_paritarie=False, limite=100):
     df = carica_dati_scuole()
     if df is None:
         return [], "Impossibile caricare i dati delle scuole."
- 
-    colonne_attese = ["DENOMINAZIONESCUOLA", "REGIONE", "DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA"]
-    mancanti = [c for c in colonne_attese if c not in df.columns]
-    if mancanti:
-        return [], f"Colonne mancanti nel CSV: {', '.join(mancanti)}"
- 
+
     if query:
-        maschera_nome = df['DENOMINAZIONESCUOLA'].astype(str).str.contains(query, case=False, na=False)
-        df = df[maschera_nome]
- 
+        q = query.strip()
+        m_nome = df["DENOMINAZIONESCUOLA"].astype(str).str.contains(q, case=False, na=False)
+        m_comune = df["DESCRIZIONECOMUNE"].astype(str).str.contains(q, case=False, na=False)
+        m_codice = df["CODICESCUOLA"].astype(str).str.contains(q, case=False, na=False)
+        df = df[m_nome | m_comune | m_codice]
+
     if regione:
-        maschera_regione = df['REGIONE'].astype(str).str.upper() == regione.upper()
-        df = df[maschera_regione]
- 
+        df = df[df["REGIONE"].astype(str).str.upper() == regione.upper()]
+
+    if provincia and provincia.strip():
+        df = df[df["PROVINCIA"].astype(str).str.upper() == provincia.strip().upper()]
+
     if solo_paritarie:
-        df = df[df['DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA'].astype(str).str.contains('NON STATALE', case=False, na=False)]
- 
-    df = df.head(50)
-    risultati = df.to_dict('records')
-    return risultati, None
- 
+        df = df[df["TIPO_GESTIONE_AVS"] == "PARITARIA"]
+
+    totale_trovate = len(df)
+    risultati = df.head(limite).to_dict("records")
+    return risultati, (totale_trovate if totale_trovate > limite else None)
+
+def trova_sito_scuola(record):
+    possibili_colonne = (
+        "URLSITOWEBSCUOLA",
+        "SITOWEBSCUOLA",
+        "SITO_WEB_SCUOLA",
+        "SITOWEB",
+        "URLSITO",
+        "SITO_INTERNET",
+        "SITOWEBISTITUZIONALE",
+    )
+    record_normalizzato = {
+        re.sub(r"[^A-Z0-9]", "", str(k).upper()): v
+        for k, v in record.items()
+    }
+    chiavi_da_provare = [re.sub(r"[^A-Z0-9]", "", c.upper()) for c in possibili_colonne]
+    chiavi_da_provare.extend(
+        chiave for chiave in record_normalizzato
+        if chiave not in chiavi_da_provare
+        and (("SITO" in chiave and ("WEB" in chiave or "SCUOLA" in chiave))
+             or ("URL" in chiave and ("SCUOLA" in chiave or "SITO" in chiave)))
+    )
+    for chiave in chiavi_da_provare:
+        valore = record_normalizzato.get(chiave)
+        if valore is None or pd.isna(valore):
+            continue
+        url_valido = normalizza_url(str(valore))
+        if url_valido:
+            return url_valido
+    return None
+
 def formatta_e_mostra(testo, indice_msg):
     testo_pulito = testo or ""
     m_trappola = re.search(r"\[TRAPPOLE\](.*?)\[/TRAPPOLE\]", testo_pulito, re.DOTALL | re.IGNORECASE)
@@ -278,71 +336,80 @@ def formatta_e_mostra(testo, indice_msg):
         with st.expander("Anteprima del testo del modulo", expanded=False):
             st.text(testo_modulo)
         try:
-            pdf_bytes = crea_pdf_editabile(testo_modulo)
+            intestazione = st.session_state.get("intestazione_istituto", "")
+            pdf_bytes = crea_pdf_editabile(testo_modulo, intestazione_istituto=intestazione)
             h = hashlib.md5(testo_modulo.encode()).hexdigest()[:8]
-            st.download_button(label="📥 Scarica PDF compilabile", data=pdf_bytes, file_name=f"Modulo_Segreteria_{h}.pdf", mime="application/pdf", key=f"btn_pdf_{h}")
+            st.download_button(
+                label="📥 Scarica PDF compilabile",
+                data=pdf_bytes,
+                file_name=f"Modulo_Segreteria_{h}.pdf",
+                mime="application/pdf",
+                key=f"btn_pdf_{indice_msg}_{h}",
+            )
         except Exception as exc:
             st.error(f"Non è stato possibile generare il PDF: {exc}")
     if diretta_html:
         st.markdown(diretta_html, unsafe_allow_html=True)
- 
+
 st.title("🏫 AVS Office")
 st.caption("Assistente Virtuale Scolastico · Un supporto pratico, chiaro e gentile per la segreteria")
- 
-mostra_anim = not st.session_state.get("avs_animazione_mostrata", False)
-st.session_state["avs_animazione_mostrata"] = True
- 
-hero_html = """
-<div class="avs-hero" style="background:linear-gradient(115deg,#F0EBFA 0%,#F8F5FB 54%,#EAF4EF 100%);border:1px solid #E6E0EA;border-radius:18px;padding:17px 22px 24px 22px;margin:8px 0 22px 0;">
-<div style="font-size:1.08rem;font-weight:800;color:#40384F;">La tua segreteria, un po’ più semplice ✨</div>
-<div style="font-size:0.92rem;color:#716B79;margin-top:4px;padding-right:95px;">Procedure, risposte operative e moduli compilabili in un unico spazio.</div>
-__AVS_CAT_ANIMATION__
+
+st.markdown("""
+<div class="avs-hero">
+  <div class="avs-hero-title">La tua segreteria, un po’ più semplice ✨</div>
+  <div class="avs-hero-sub">Procedure, risposte operative e moduli compilabili in un unico spazio.</div>
+  <div class="avs-cat-chase">
+    <span class="avs-mouse">🐭</span>
+    <span class="avs-cat">🐈</span>
+  </div>
 </div>
-"""
-anim = """
-<div class="avs-cat-chase" aria-hidden="true" title="Una piccola pausa felina">
-<span class="avs-mouse">🐭</span>
-<span class="avs-cat">🐈</span>
-</div>
-""" if mostra_anim else ""
-st.markdown(hero_html.replace("__AVS_CAT_ANIMATION__", anim), unsafe_allow_html=True)
- 
+""", unsafe_allow_html=True)
+
 if "messaggi" not in st.session_state:
     st.session_state["messaggi"] = []
 if "modulo_testo_editabile" not in st.session_state:
     st.session_state["modulo_testo_editabile"] = ""
 if "modulo_guidato_pronto" not in st.session_state:
     st.session_state["modulo_guidato_pronto"] = False
- 
+if "intestazione_istituto" not in st.session_state:
+    st.session_state["intestazione_istituto"] = "ISTITUTO SCOLASTICO - SEGRETERIA AMMINISTRATIVA"
+
 with st.sidebar:
     st.header("🧰 Strumenti AVS")
-    strumento = st.radio("Che cosa vuoi fare?", ["Assistente segreteria", "Crea modulo PDF compilabile", "Cerca codici meccanografici"], key="strumento_avs")
+    strumento = st.radio(
+        "Che cosa vuoi fare?",
+        ["Assistente segreteria", "Crea modulo PDF compilabile", "Cerca codici meccanografici"],
+        key="strumento_avs",
+    )
+    st.divider()
+    st.text_input(
+        "🏫 Intestazione PDF del tuo istituto",
+        key="intestazione_istituto",
+        help="Viene stampata in alto in tutti i PDF generati. Puoi anche impostarla dalla ricerca scuole.",
+    )
     st.divider()
     if strumento == "Assistente segreteria":
         st.header("⚡ Azioni rapide")
         st.markdown("Seleziona una procedura frequente per avviare la richiesta.")
-        contesto = "Istituto non specificato dall'utente. Usa segnaposto tra parentesi quadre per i dati mancanti. "
-        istr = "Non inventare dati ufficiali della scuola e non dichiarare di averli verificati online. Per ogni dato dell'istituto non fornito dall'utente, usa un segnaposto tra parentesi quadre e indica cosa va verificato prima dell'uso. "
+        contesto = f"Istituto dell'utente: {st.session_state['intestazione_istituto']}. "
+        istr = "Non inventare dati ufficiali non forniti e non dichiarare di averli verificati online. Usa segnaposto tra parentesi quadre per i dati mancanti. "
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
-            st.session_state["prompt_rapido"] = f"{contesto} {istr} Un docente supplente deve prendere servizio oggi ma ha la febbre e non può venire fisicamente a firmare. Come devo procedere? Prepara anche una bozza di modulo editabile per la presa di servizio. Inserisci nella bozza solo i dati della scuola che hai potuto verificare; per quelli non verificati usa segnaposto tra parentesi quadre."
-            st.session_state["ricerca_web_azione_rapida"] = False
+            st.session_state["prompt_rapido"] = f"{contesto} {istr} Un docente supplente deve prendere servizio oggi ma ha la febbre e non può venire fisicamente a firmare. Come devo procedere? Prepara anche una bozza di modulo editabile per la presa di servizio."
         if st.button("🏥 Assenza per malattia ATA/docente", use_container_width=True):
-            st.session_state["prompt_rapido"] = f"{contesto} {istr} Un docente mi ha comunicato stamattina di essere in malattia. Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola. Non inventare dati specifici dell'istituto e cita le fonti web consultate."
-            st.session_state["ricerca_web_azione_rapida"] = False
+            st.session_state["prompt_rapido"] = f"{contesto} {istr} Un docente mi ha comunicato stamattina di essere in malattia. Spiega i passaggi amministrativi da verificare su SIDI, Argo e NoiPA, distinguendo gli obblighi certi dalle procedure che dipendono dalla scuola."
         if st.button("✉️ Bozza convocazione interpello", use_container_width=True):
-            st.session_state["prompt_rapido"] = f"{contesto} {istr} Devo inviare una convocazione urgente per supplenza breve tramite interpello. Prepara una mail formale e una bozza di modulo di accettazione editabile. Indica quali dati devo verificare prima dell'invio. Inserisci nella bozza solo dati della scuola confermati da fonti affidabili; usa segnaposto tra parentesi quadre per le informazioni mancanti e cita le fonti consultate."
-            st.session_state["ricerca_web_azione_rapida"] = False
+            st.session_state["prompt_rapido"] = f"{contesto} {istr} Devo inviare una convocazione urgente per supplenza breve tramite interpello. Prepara una mail formale e una bozza di modulo di accettazione editabile. Indica quali dati devo verificare prima dell'invio."
         st.divider()
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
             st.session_state["messaggi"] = []
             st.rerun()
-    else:
+    elif strumento == "Crea modulo PDF compilabile":
         st.markdown("Descrivi il modulo che ti serve, controlla la bozza e scarica un PDF con campi compilabili.")
         if st.button("🗑️ Svuota bozza modulo", use_container_width=True):
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
- 
+
 if strumento == "Crea modulo PDF compilabile":
     st.subheader("📄 Crea un modulo PDF compilabile")
     st.write("Descrivi il documento che ti serve. AVS preparerà una bozza da controllare; potrai correggerla prima di scaricare il PDF.")
@@ -375,7 +442,7 @@ Destinatario: {destinatario.strip() or "da specificare"}
 Scopo: {scopo.strip()}
 Campi richiesti: {campi_richiesti.strip() or "individua i campi strettamente necessari"}
 Indicazioni fornite dall'utente: {riferimenti.strip() or "nessuna"}
- 
+
 Regole:
 - Rispondi in italiano con il testo del modulo, senza introduzioni e senza markdown decorativo.
 - Prima riga: titolo breve del modulo.
@@ -390,7 +457,15 @@ Regole:
                 try:
                     with st.spinner("AVS sta preparando la bozza..."):
                         client = get_gemini_client(api_key)
-                        risposta_modulo = client.models.generate_content(model=MODEL_NAME, contents=prompt_modulo, config=types.GenerateContentConfig(system_instruction="Sei AVS, assistente per le segreterie scolastiche italiane. Genera bozze prudenti, chiare e pratiche. Non inventare norme o dichiarare ufficiale un modello generato.", temperature=0.2, max_output_tokens=1200))
+                        risposta_modulo = client.models.generate_content(
+                            model=MODEL_NAME,
+                            contents=prompt_modulo,
+                            config=types.GenerateContentConfig(
+                                system_instruction="Sei AVS, assistente per le segreterie scolastiche italiane. Genera bozze prudenti, chiare e pratiche. Non inventare norme o dichiarare ufficiale un modello generato.",
+                                temperature=0.2,
+                                max_output_tokens=1200,
+                            ),
+                        )
                     testo_generato = (risposta_modulo.text or "").strip()
                     if not testo_generato:
                         st.error("Non è arrivato testo. Riprova con una descrizione più precisa.")
@@ -407,17 +482,18 @@ Regole:
         testo_modulo_finale = st.text_area("Testo del modulo (puoi modificarlo prima di generare il PDF)", key="editor_modulo", value=st.session_state["modulo_testo_editabile"], height=380)
         if testo_modulo_finale.strip():
             try:
-                pdf_bytes = crea_pdf_editabile(testo_modulo_finale)
+                pdf_bytes = crea_pdf_editabile(testo_modulo_finale, intestazione_istituto=st.session_state["intestazione_istituto"])
                 st.download_button(label="📥 Scarica PDF compilabile", data=pdf_bytes, file_name="AVS_modulo_compilabile.pdf", mime="application/pdf", key="download_pdf_guidato", use_container_width=True)
             except Exception as exc:
                 st.error(f"Non è stato possibile generare il PDF: {exc}")
         st.caption("Nota: la compatibilità dei campi compilabili dipende dal lettore PDF usato, soprattutto su smartphone. Prova il file prima di distribuirlo.")
+
 elif strumento == "Cerca codici meccanografici":
     st.subheader("🔍 Cerca codici meccanografici")
-    st.write("Cerca per nome scuola o comune. I dati provengono dal dataset ufficiale del Ministero.")
-    col1, col2 = st.columns(2)
+    st.write("Cerca per nome scuola, comune o codice meccanografico. I dati provengono dal dataset ufficiale del Ministero.")
+    col1, col2, col3 = st.columns([2, 1.5, 1])
     with col1:
-        query_scuola = st.text_input("Nome scuola o comune", placeholder="Es. Manzoni, Ghirotti, Roma")
+        query_scuola = st.text_input("Nome scuola, comune o codice", placeholder="Es. Manzoni, Firenze, FIIC8...")
     with col2:
         regioni = {
             "Tutte": None,
@@ -427,56 +503,93 @@ elif strumento == "Cerca codici meccanografici":
             "LOMBARDIA": "LOMBARDIA", "MARCHE": "MARCHE", "MOLISE": "MOLISE",
             "PIEMONTE": "PIEMONTE", "PUGLIA": "PUGLIA", "SARDEGNA": "SARDEGNA",
             "SICILIA": "SICILIA", "TOSCANA": "TOSCANA", "TRENTINO ALTO ADIGE": "TRENTINO ALTO ADIGE",
-            "UMBRIA": "UMBRIA", "VALLE D'AOSTA": "VALLE D'AOSTA", "VENETO": "VENETO"
+            "UMBRIA": "UMBRIA", "VALLE D'AOSTA": "VALLE D'AOSTA", "VENETO": "VENETO",
         }
         regione_sel = st.selectbox("Regione (facoltativo)", list(regioni.keys()))
-        solo_paritarie = st.checkbox("Solo scuole paritarie", value=False)
+    with col3:
+        provincia_sel = st.text_input("Sigla Provincia", placeholder="Es. FI, RM", max_chars=2)
+    solo_paritarie = st.checkbox("Solo scuole paritarie", value=False)
+
     if st.button("🔎 Cerca", use_container_width=True):
-        if not query_scuola.strip() and regione_sel == "Tutte" and not solo_paritarie:
+        if not query_scuola.strip() and regione_sel == "Tutte" and not provincia_sel.strip() and not solo_paritarie:
             st.warning("Inserisci almeno un criterio di ricerca.")
         else:
             with st.spinner("Ricerca in corso..."):
-                scuole, errore = cerca_scuole(query_scuola.strip(), regioni.get(regione_sel), solo_paritarie)
-            if errore:
-                st.error(f"Errore: {errore}")
+                scuole, troncati = cerca_scuole(query_scuola, regioni.get(regione_sel), provincia_sel, solo_paritarie)
+            if isinstance(troncati, str):
+                st.error(f"Errore: {troncati}")
             elif not scuole:
                 st.info("Nessuna scuola trovata.")
             else:
-                st.success(f"Trovate {len(scuole)} scuole.")
- 
-                scuole_per_comune = {}
-                for s in scuole:
-                    comune = s.get("DESCRIZIONECOMUNE", "Comune sconosciuto")
-                    if comune not in scuole_per_comune:
-                        scuole_per_comune[comune] = []
-                    scuole_per_comune[comune].append(s)
- 
-                for comune in sorted(scuole_per_comune.keys()):
-                    st.markdown(f"### 📍 {comune}")
-                    for s in scuole_per_comune[comune]:
-                        codice = s.get("CODICESCUOLA", "")
-                        denominazione = s.get("DENOMINAZIONESCUOLA", "")
-                        provincia = s.get("PROVINCIA", "")
-                        email = s.get("INDIRIZZOEMAILSCUOLA", "")
-                        pec = s.get("INDIRIZZOPECSCUOLA", "")
-                        indirizzo = s.get("INDIRIZZOSCUOLA", "")
-                        sito = normalizza_url(s.get("SITOWEBSCUOLA", ""))
- 
-                        titolo = f"{denominazione} ({codice}) - {indirizzo}, {comune} ({provincia})"
-                        if sito:
-                            titolo = "🌐 " + titolo
- 
-                        with st.expander(titolo):
-                            st.write(f"**Indirizzo:** {indirizzo}")
-                            st.write(f"**Email:** {email}")
-                            st.write(f"**PEC:** {pec}")
-                            if sito:
-                                st.markdown(f"**Sito web:** [{sito}]({sito})")
-                                st.link_button("🌐 Apri il sito della scuola", sito, use_container_width=False)
-                            else:
-                                st.caption("Sito web non presente nel dataset per questo istituto.")
- 
-                st.caption("Fonte: Open Data del Ministero dell'Istruzione e del Merito.")
+                st.session_state["risultati_scuole"] = scuole
+                st.session_state["risultati_troncati"] = troncati
+
+    scuole = st.session_state.get("risultati_scuole", [])
+    troncati = st.session_state.get("risultati_troncati")
+    if scuole:
+        msg_ris = f"Mostrate {len(scuole)} scuole" + (f" (su {troncati} totali: affina la ricerca)." if troncati else ".")
+        st.success(msg_ris)
+
+        df_export = pd.DataFrame(scuole)
+        csv_export = df_export.to_csv(index=False, sep=";").encode("utf-8-sig")
+        st.download_button("📊 Esporta elenco in CSV (Excel)", data=csv_export, file_name="elenco_scuole_avs.csv", mime="text/csv")
+
+        scuole_per_comune = {}
+        for s in scuole:
+            comune = s.get("DESCRIZIONECOMUNE", "Comune sconosciuto")
+            scuole_per_comune.setdefault(comune, []).append(s)
+
+        for comune in sorted(scuole_per_comune.keys()):
+            st.markdown(f"### 📍 {comune}")
+            for idx_s, s in enumerate(scuole_per_comune[comune]):
+                codice = s.get("CODICESCUOLA", "")
+                denominazione = s.get("DENOMINAZIONESCUOLA", "")
+                provincia = s.get("PROVINCIA", "")
+                email = s.get("INDIRIZZOEMAILSCUOLA", "")
+                pec = s.get("INDIRIZZOPECSCUOLA", "")
+                indirizzo = s.get("INDIRIZZOSCUOLA", "")
+                tipo_g = s.get("TIPO_GESTIONE_AVS", "")
+                sito_scuola = trova_sito_scuola(s)
+                query_google = quote_plus(f'"{denominazione}" "{comune}" sito ufficiale scuola')
+                link_google = f"https://www.google.com/search?q={query_google}"
+
+                with st.expander(f"{denominazione} ({codice}) · {tipo_g} - {indirizzo}, {comune} ({provincia})"):
+                    st.write(f"**Codice meccanografico:** {codice}")
+                    st.write(f"**Indirizzo:** {indirizzo} - {comune} ({provincia})")
+                    st.write(f"**Email:** {email}")
+                    st.write(f"**PEC:** {pec}")
+                    st.divider()
+
+                    col_sito, col_google = st.columns(2)
+                    with col_sito:
+                        if sito_scuola:
+                            st.link_button("🌐 Apri il sito della scuola", sito_scuola, use_container_width=True)
+                        else:
+                            st.caption("Sito diretto non presente nei dati disponibili.")
+                    with col_google:
+                        st.link_button("🔎 Cerca il sito su Google", link_google, use_container_width=True)
+                    st.caption("Il link Google apre una ricerca per nome della scuola e comune: verifica che il risultato sia il sito ufficiale prima di usarlo.")
+
+                    col_act1, col_act2 = st.columns(2)
+                    with col_act1:
+                        if st.button("📌 Imposta come mia scuola", key=f"set_mio_{codice}_{idx_s}", use_container_width=True):
+                            st.session_state["intestazione_istituto"] = f"{denominazione} ({codice}) - {comune}"
+                            st.toast("Intestazione aggiornata per tutti i PDF!")
+                    with col_act2:
+                        if st.button("✉️ Scrivi mail a questa scuola", key=f"mail_{codice}_{idx_s}", use_container_width=True):
+                            st.session_state["prompt_rapido"] = (
+                                f"Prepara una bozza di comunicazione ufficiale via PEC/email indirizzata a:\n"
+                                f"- Scuola: {denominazione} (Cod. Mecc. {codice})\n"
+                                f"- Indirizzo: {indirizzo}, {comune} ({provincia})\n"
+                                f"- PEC: {pec} | Email: {email}\n"
+                                f"Oggetto da completare: [OGGETTO_COMUNICAZIONE, es. richiesta nulla osta / trasmissione fascicolo alunno]. "
+                                f"Mittente: {st.session_state['intestazione_istituto']}."
+                            )
+                            st.session_state["strumento_avs"] = "Assistente segreteria"
+                            st.rerun()
+
+        st.caption("Fonte dei dati anagrafici: Open Data del Ministero dell'Istruzione e del Merito. I siti web sono mostrati solo se presenti nel CSV; la ricerca Google è un'alternativa e non costituisce una verifica automatica.")
+
 else:
     for idx, messaggio in enumerate(st.session_state["messaggi"]):
         with st.chat_message(messaggio["role"]):
@@ -487,7 +600,6 @@ else:
     domanda = st.chat_input("Scrivi il tuo dubbio amministrativo o chiedi un modulo...")
     if "prompt_rapido" in st.session_state:
         domanda = st.session_state.pop("prompt_rapido")
-        st.session_state.pop("ricerca_web_azione_rapida", None)
     if domanda:
         st.session_state["messaggi"].append({"role": "user", "content": domanda})
         with st.chat_message("user"):
@@ -500,10 +612,10 @@ else:
                         raise ValueError("Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud.")
                     client = get_gemini_client(api_key)
                     contenuti = []
-                    for m in st.session_state["messaggi"][-4:]:
+                    for m in st.session_state["messaggi"][-6:]:
                         ruolo = "model" if m["role"] == "assistant" else "user"
                         contenuti.append({"role": ruolo, "parts": [{"text": m["content"]}]})
-                    configurazione = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, temperature=0.2, max_output_tokens=900)
+                    configurazione = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, temperature=0.2, max_output_tokens=1100)
                     risposta = client.models.generate_content(model=MODEL_NAME, contents=contenuti, config=configurazione)
                     try:
                         testo_risposta = (risposta.text or "").strip()
@@ -516,3 +628,4 @@ else:
                 except Exception as exc:
                     st.error("Si è verificato un problema durante la richiesta a Gemini. Controlla la chiave API, la connessione e il nome del modello.")
                     st.code(str(exc))
+
