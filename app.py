@@ -583,7 +583,7 @@ with st.sidebar:
     st.header("🧰 Strumenti AVS")
     strumento = st.radio(
         "Che cosa vuoi fare?",
-        ["Assistente segreteria", "Crea modulo PDF compilabile"],
+        ["Assistente segreteria", "Ricerca dati della scuola", "Crea modulo PDF compilabile"],
         key="strumento_avs",
     )
 
@@ -604,49 +604,6 @@ with st.sidebar:
             "Per ogni dato dell'istituto non fornito dall'utente, usa un segnaposto tra parentesi quadre "
             "e indica cosa va verificato prima dell'uso. "
         )
-
-        # Ricerca dedicata dei dati identificativi della scuola e del codice meccanografico.
-        with st.expander("🔎 Ricerca dati della scuola / codice meccanografico", expanded=False):
-            nome_scuola_ricerca = st.text_input(
-                "Nome dell'istituto",
-                key="avs_ricerca_nome_scuola",
-                placeholder="Es. I.C. Alessandro Manzoni",
-            ).strip()
-            codice_scuola_ricerca = st.text_input(
-                "Codice meccanografico (se lo conosci)",
-                key="avs_ricerca_codice_scuola",
-                placeholder="Es. RMIC000000",
-            ).strip().upper()
-            localita_scuola_ricerca = st.text_input(
-                "Comune / provincia (consigliato)",
-                key="avs_ricerca_localita_scuola",
-                placeholder="Es. Roma (RM)",
-            ).strip()
-            st.caption(
-                "La ricerca usa fonti pubbliche. Controlla i dati e i collegamenti prima di inserirli in atti ufficiali."
-            )
-            if st.button("Cerca scuola e codice", key="avs_avvia_ricerca_scuola", use_container_width=True):
-                if not (nome_scuola_ricerca or codice_scuola_ricerca):
-                    st.warning("Inserisci il nome della scuola oppure il codice meccanografico.")
-                else:
-                    dettagli_ricerca = []
-                    if nome_scuola_ricerca:
-                        dettagli_ricerca.append(f"Nome scuola: {nome_scuola_ricerca}.")
-                    if codice_scuola_ricerca:
-                        dettagli_ricerca.append(f"Codice meccanografico da verificare: {codice_scuola_ricerca}.")
-                    if localita_scuola_ricerca:
-                        dettagli_ricerca.append(f"Comune/provincia: {localita_scuola_ricerca}.")
-                    st.session_state["prompt_rapido"] = (
-                        "Esegui una ricerca web per identificare la scuola e verificare il codice meccanografico. "
-                        + " ".join(dettagli_ricerca)
-                        + " Cerca prioritariamente fonti ufficiali: sito della scuola, MIM/Scuola in Chiaro e altri siti istituzionali. "
-                        "Mostra una scheda con denominazione completa, tipologia, codice meccanografico, località, sito ufficiale e contatti pubblici se disponibili. "
-                        "Inserisci link Markdown cliccabili alle pagine effettivamente consultate, in modo che si possano aprire direttamente. "
-                        "Distingui i dati confermati da quelli non verificati; se ci sono scuole omonime, segnala l'ambiguità. "
-                        "Non inventare dati o link. Concludi indicando cosa verificare manualmente prima di usare i dati in documenti ufficiali."
-                    )
-                    st.session_state["ricerca_web_azione_rapida"] = True
-                    st.rerun()
 
         if st.button("📋 Presa di servizio supplente", use_container_width=True):
             st.session_state["prompt_rapido"] = (
@@ -684,7 +641,7 @@ with st.sidebar:
         if st.button("🗑️ Nuova conversazione", use_container_width=True):
             st.session_state["messaggi"] = []
             st.rerun()
-    else:
+    elif strumento == "Crea modulo PDF compilabile":
         st.markdown(
             "Descrivi il modulo che ti serve, controlla la bozza e scarica "
             "un PDF con campi compilabili."
@@ -693,9 +650,102 @@ with st.sidebar:
             st.session_state["modulo_testo_editabile"] = ""
             st.session_state["modulo_guidato_pronto"] = False
             st.rerun()
+    else:
+        st.markdown(
+            "Cerca una scuola per nome e località per trovare il codice meccanografico, "
+            "i recapiti e il sito ufficiale."
+        )
 
 
-if strumento == "Crea modulo PDF compilabile":
+if strumento == "Ricerca dati della scuola":
+    st.subheader("🔎 Ricerca dati della scuola")
+    st.write(
+        "Trova il codice meccanografico partendo dal nome della scuola. "
+        "Indica anche il comune per distinguere istituti con nomi simili. "
+        "AVS cercherà i contatti pubblici e il sito ufficiale nelle fonti disponibili."
+    )
+
+    with st.form("form_ricerca_dati_scuola"):
+        nome_scuola_ricerca = st.text_input(
+            "Nome della scuola *",
+            placeholder="Es. Istituto Comprensivo Alessandro Manzoni",
+        ).strip()
+        localita_scuola_ricerca = st.text_input(
+            "Comune e provincia *",
+            placeholder="Es. Roma (RM)",
+        ).strip()
+        tipo_scuola_ricerca = st.selectbox(
+            "Tipologia (facoltativa)",
+            ["Non so", "Infanzia", "Primaria", "Secondaria di I grado", "Secondaria di II grado", "Istituto comprensivo", "Scuola paritaria", "Altro"],
+        )
+        avvia_ricerca_scuola = st.form_submit_button(
+            "🔎 Cerca codice e contatti", use_container_width=True
+        )
+
+    if avvia_ricerca_scuola:
+        if not nome_scuola_ricerca or not localita_scuola_ricerca:
+            st.warning("Inserisci il nome della scuola e il comune/provincia per avviare una ricerca più precisa.")
+        else:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+            if not api_key:
+                st.error("Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud.")
+            else:
+                prompt_scuola = f"""
+Cerca sul web una scuola italiana e restituisci i suoi dati identificativi.
+Nome indicato: {nome_scuola_ricerca}
+Comune/provincia: {localita_scuola_ricerca}
+Tipologia indicata: {tipo_scuola_ricerca}
+
+OBIETTIVO: trovare il codice meccanografico della scuola partendo dal nome e dalla località, non fare la ricerca inversa.
+Cerca prioritariamente fonti ufficiali: sito ufficiale dell'istituto, portale MIM/Scuola in Chiaro e altri siti istituzionali.
+Restituisci una scheda in italiano con questi campi, in quest'ordine:
+1. Denominazione ufficiale completa
+2. Codice meccanografico (specifica a quale sede/plesso si riferisce; se esistono codici diversi, elencali separatamente)
+3. Indirizzo completo
+4. Telefono
+5. Email ordinaria
+6. PEC, se pubblica e reperibile
+7. Sito web ufficiale come link Markdown cliccabile
+8. Fonti consultate, con link Markdown cliccabili
+
+Non inventare né dedurre codici, numeri di telefono, indirizzi email o siti. Per ogni campo non trovato scrivi "Non trovato in una fonte affidabile". Se trovi più scuole compatibili, mostra le alternative e spiega come distinguerle, senza scegliere arbitrariamente. Distingui chiaramente i dati confermati da quelli non verificati. Non restituire soltanto link a ricerche Google: cerca pagine specifiche e link diretti alle fonti.
+"""
+                try:
+                    with st.spinner("AVS sta cercando nelle fonti pubbliche..."):
+                        client = get_gemini_client(api_key)
+                        risposta_scuola = client.models.generate_content(
+                            model=MODEL_NAME,
+                            contents=prompt_scuola,
+                            config=types.GenerateContentConfig(
+                                system_instruction=(
+                                    "Sei AVS, assistente per le segreterie scolastiche italiane. "
+                                    "Per questa richiesta usa la ricerca web. Sii prudente: non inventare dati, "
+                                    "codici o URL; cita link diretti alle fonti realmente consultate."
+                                ),
+                                temperature=0.1,
+                                max_output_tokens=1800,
+                                tools=[types.Tool(google_search=types.GoogleSearch())],
+                            ),
+                        )
+                    testo_scuola = (risposta_scuola.text or "").strip()
+                    if testo_scuola:
+                        st.success("Ricerca completata. Verifica i dati sulle fonti prima di usarli in atti ufficiali.")
+                        st.markdown(testo_scuola, unsafe_allow_html=False)
+                    else:
+                        st.warning("La ricerca non ha restituito una risposta testuale. Riprova con il nome completo della scuola.")
+                except Exception as exc:
+                    st.error(
+                        "Non è stato possibile completare la ricerca. Potrebbe dipendere dalla disponibilità "
+                        "della ricerca web per il modello o dalla quota API."
+                    )
+                    st.code(str(exc))
+
+    st.info(
+        "Nota: il codice meccanografico può cambiare tra istituto principale e plessi. "
+        "Controlla sempre la fonte ufficiale prima di utilizzare i dati in documenti amministrativi."
+    )
+
+elif strumento == "Crea modulo PDF compilabile":
     st.subheader("📄 Crea un modulo PDF compilabile")
     st.write(
         "Descrivi il documento che ti serve. AVS preparerà una bozza da controllare; "
@@ -927,3 +977,4 @@ else:
                         "Controlla la chiave API, la connessione e il nome del modello."
                     )
                     st.code(str(exc))
+
