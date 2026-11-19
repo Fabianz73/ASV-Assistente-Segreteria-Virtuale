@@ -1,4 +1,5 @@
 import io
+import csv
 import re
 import textwrap
 import unicodedata
@@ -6,6 +7,7 @@ import time
 from html import unescape
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
+from pathlib import Path
 
 import streamlit as st
 from google import genai
@@ -62,6 +64,165 @@ def cerca_web_pubblica(query, max_risultati=8):
         if len(risultati) >= max_risultati:
             break
     return risultati
+
+
+def normalizza_intestazione(testo):
+    """Normalizza intestazioni e testi per confronti tolleranti ad accenti e punteggiatura."""
+    testo = unicodedata.normalize("NFKD", str(testo or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "", testo.lower())
+
+
+def leggi_csv_scuole(contenuto, nome_file="archivio.csv"):
+    """Legge CSV MIM con BOM e separatori comuni (;, , o tab)."""
+    if isinstance(contenuto, bytes):
+        testo = contenuto.decode("utf-8-sig", errors="replace")
+    else:
+        testo = str(contenuto).lstrip("\ufeff")
+    campione = testo[:12000]
+    try:
+        dialetto = csv.Sniffer().sniff(campione, delimiters=";,\t|")
+        delimitatore = dialetto.delimiter
+    except csv.Error:
+        delimitatore = ";" if campione.count(";") >= campione.count(",") else ","
+    lettore = csv.DictReader(io.StringIO(testo), delimiter=delimitatore)
+    if not lettore.fieldnames:
+        return []
+    righe = []
+    for riga in lettore:
+        pulita = {str(k or "").strip().lstrip("\ufeff"): str(v or "").strip() for k, v in riga.items() if k}
+        if any(pulita.values()):
+            pulita["__file_origine__"] = nome_file
+            righe.append(pulita)
+    return righe
+
+
+def carica_archivi_scuole(file_caricati=None):
+    """Carica automaticamente i CSV presenti accanto ad app.py e/o quelli caricati nell'interfaccia."""
+    righe = []
+    nomi_attesi = ("SCUANAGRAFEPAR20262720260901.csv", "SCUANAGRAFESTAT20262720260901.csv")
+    cartella_app = Path(__file__).resolve().parent
+    trovati_locali = []
+    for nome in nomi_attesi:
+        percorso = cartella_app / nome
+        if percorso.is_file():
+            trovati_locali.append(percorso)
+    for percorso in trovati_locali:
+        try:
+            righe.extend(leggi_csv_scuole(percorso.read_bytes(), percorso.name))
+        except Exception:
+            continue
+    for file in (file_caricati or []):
+        try:
+            file.seek(0)
+            righe.extend(leggi_csv_scuole(file.read(), getattr(file, "name", "CSV caricato")))
+        except Exception:
+            continue
+    return righe, len(trovati_locali)
+
+
+def valore_colonna(riga, alias):
+    """Trova una colonna usando alias, perché le intestazioni possono variare tra dataset."""
+    colonne = {normalizza_intestazione(k): v for k, v in riga.items() if not str(k).startswith("__")}
+    for nome in alias:
+        chiave = normalizza_intestazione(nome)
+        if chiave in colonne and colonne[chiave]:
+            return colonne[chiave]
+    # Fallback tollerante: intestazioni con suffissi/prefissi aggiuntivi.
+    for nome in alias:
+        chiave = normalizza_intestazione(nome)
+        for intestazione, valore in colonne.items():
+            if valore and chiave and (intestazione.endswith(chiave) or chiave.endswith(intestazione)):
+                return valore
+    return ""
+
+
+def cerca_scuole_nei_csv(righe, nome_scuola, regione, massimo=12):
+    """Ricerca locale per denominazione e regione; non usa Gemini né richieste web."""
+    query = normalizza_intestazione(nome_scuola)
+    parole = [p for p in re.findall(r"[a-z0-9]+", normalizza_intestazione(nome_scuola)) if len(p) > 1]
+    regione_norm = normalizza_intestazione(regione)
+    risultati = []
+    for riga in righe:
+        nome = valore_colonna(riga, ["DENOMINAZIONESCUOLA", "DENOMINAZIONE SCUOLA", "DENOMINAZIONE", "NOME SCUOLA"])
+        if not nome:
+            continue
+        regione_riga = valore_colonna(riga, ["REGIONE", "DESCRIZIONEREGIONE", "REGIONE SCUOLA"])
+        if regione_riga and normalizza_intestazione(regione_riga) != regione_norm:
+            continue
+        nome_norm = normalizza_intestazione(nome)
+        # Richiede una corrispondenza significativa, evitando risultati casuali.
+        if query and query in nome_norm:
+            punteggio = 100 + len(query)
+        elif parole and all(parola in nome_norm for parola in parole):
+            punteggio = 50 + sum(len(parola) for parola in parole)
+        elif parole:
+            corrispondenze = sum(1 for parola in parole if parola in nome_norm)
+            if corrispondenze < max(2, (len(parole) + 1) // 2):
+                continue
+            punteggio = corrispondenze * 10
+        else:
+            continue
+        riga_out = {
+            "denominazione": nome,
+            "codice": valore_colonna(riga, ["CODICESCUOLA", "CODICE SCUOLA", "CODICE MECCANOGRAFICO", "CODICE MECCANOGRAFICO SCUOLA"]),
+            "indirizzo": valore_colonna(riga, ["INDIRIZZOSCUOLA", "INDIRIZZO SCUOLA", "INDIRIZZO"]),
+            "cap": valore_colonna(riga, ["CAPSCUOLA", "CAP SCUOLA", "CAP"]),
+            "comune": valore_colonna(riga, ["DESCRIZIONECOMUNE", "COMUNE", "DENOMINAZIONECOMUNE", "CODICECOMUNESCUOLA"]),
+            "provincia": valore_colonna(riga, ["PROVINCIA", "SIGLAPROVINCIA"]),
+            "regione": regione_riga or regione,
+            "telefono": valore_colonna(riga, ["TELEFONO", "TELEFONOSCUOLA", "NUMEROTELEFONO", "TELEFONO SCUOLA"]),
+            "email": valore_colonna(riga, ["INDIRIZZOEMAILSCUOLA", "EMAILSCUOLA", "EMAIL", "INDIRIZZOEMAIL"]),
+            "pec": valore_colonna(riga, ["INDIRIZZOPECSCUOLA", "PECSCUOLA", "PEC", "INDIRIZZOPEC"]),
+            "sito": valore_colonna(riga, ["SITOWEBSCUOLA", "SITOWEB", "URLSITO", "SITO WEB", "SITOISTITUTO"]),
+            "tipo": valore_colonna(riga, ["DESCRIZIONETIPOLOGIAGRADOISTRUZIONESCUOLA", "TIPOLOGIA", "ORDINESCUOLA", "GRADOISTRUZIONE"]),
+            "origine": riga.get("__file_origine__", "archivio CSV"),
+            "_punteggio": punteggio,
+        }
+        risultati.append(riga_out)
+    risultati.sort(key=lambda x: x["_punteggio"], reverse=True)
+    # Evita duplicati per codice meccanografico, mantenendo il primo risultato.
+    unici, visti = [], set()
+    for risultato in risultati:
+        chiave = risultato["codice"] or (risultato["denominazione"], risultato["origine"])
+        if chiave in visti:
+            continue
+        visti.add(chiave)
+        unici.append(risultato)
+        if len(unici) >= massimo:
+            break
+    return unici
+
+
+def mostra_schede_scuole(risultati):
+    """Mostra i dati realmente presenti nei CSV; non completa né inventa i campi mancanti."""
+    for i, scuola in enumerate(risultati, 1):
+        with st.container(border=True):
+            st.markdown(f"### 🏫 {scuola['denominazione']}")
+            if scuola["codice"]:
+                st.markdown(f"**Codice meccanografico:** `{scuola['codice']}`")
+            else:
+                st.warning("Codice meccanografico non presente nella riga del CSV.")
+            if scuola["tipo"]:
+                st.write(f"**Tipologia:** {scuola['tipo']}")
+            indirizzo = scuola["indirizzo"]
+            if scuola["cap"]:
+                indirizzo = f"{indirizzo}, {scuola['cap']}" if indirizzo else scuola["cap"]
+            if scuola["comune"]:
+                indirizzo = f"{indirizzo} · {scuola['comune']}" if indirizzo else scuola["comune"]
+            if scuola["provincia"]:
+                indirizzo = f"{indirizzo} ({scuola['provincia']})" if indirizzo else scuola["provincia"]
+            st.write(f"**Indirizzo:** {indirizzo or 'Non presente nel CSV'}")
+            st.write(f"**Telefono:** {scuola['telefono'] or 'Non presente nel CSV'}")
+            st.write(f"**Email:** {scuola['email'] or 'Non presente nel CSV'}")
+            st.write(f"**PEC:** {scuola['pec'] or 'Non presente nel CSV'}")
+            sito = scuola["sito"].strip()
+            if sito:
+                if not sito.startswith(("http://", "https://")):
+                    sito = "https://" + sito
+                st.markdown(f"**Sito web:** [{sito}]({sito})")
+            else:
+                st.write("**Sito web:** Non presente nel CSV")
+            st.caption(f"Fonte: {scuola['origine']} · Anagrafica scolastica 2026/2027. I campi mancanti non sono stati dedotti.")
 
 
 @st.cache_resource
@@ -788,73 +949,87 @@ if st.session_state.get("pagina_ricerca_scuola", False):
             "🔎 Cerca codice e contatti", use_container_width=True
         )
 
+    # Se i CSV non sono stati inseriti nel repository insieme ad app.py, è possibile caricarli qui.
+    percorsi_csv_locali = [
+        Path(__file__).resolve().parent / "SCUANAGRAFEPAR20262720260901.csv",
+        Path(__file__).resolve().parent / "SCUANAGRAFESTAT20262720260901.csv",
+    ]
+    csv_locali_presenti = any(percorso.is_file() for percorso in percorsi_csv_locali)
+    csv_caricati = []
+    if not csv_locali_presenti:
+        csv_caricati = st.file_uploader(
+            "📂 Archivi scolastici CSV (facoltativo se già presenti nel repository)",
+            type=["csv"],
+            accept_multiple_files=True,
+            key="csv_anagrafi_scuole",
+            help="Puoi caricare l'archivio delle scuole statali e quello delle scuole paritarie. La ricerca viene eseguita localmente nei file.",
+        )
+        st.caption("Suggerimento: per non doverli caricare ogni volta, aggiungi entrambi i CSV nella stessa cartella di app.py nel repository GitHub.")
+    else:
+        st.caption("✅ Archivi scolastici CSV rilevati nel repository: la ricerca userà prima questi dati ufficiali.")
+
     if avvia_ricerca_scuola:
         if not nome_scuola_ricerca or not regione_scuola_ricerca:
             st.warning("Inserisci il nome della scuola e seleziona la regione.")
         else:
-            api_key = st.secrets.get("GEMINI_API_KEY")
-            if not api_key:
-                st.error("Chiave API mancante. Configura GEMINI_API_KEY nei Secrets di Streamlit Cloud.")
-            else:
-                prompt_scuola = f"""
-Cerca sul web una scuola italiana e restituisci i suoi dati identificativi.
-Nome indicato: {nome_scuola_ricerca}
-Regione: {regione_scuola_ricerca}
-
-OBIETTIVO: trovare il codice meccanografico partendo dal nome della scuola e dalla regione, non fare la ricerca inversa.
-Cerca prioritariamente fonti ufficiali: sito ufficiale dell'istituto, portale MIM/Scuola in Chiaro e altri siti istituzionali.
-Restituisci una scheda in italiano, ben leggibile, con questi campi in quest'ordine:
-1. Denominazione ufficiale completa
-2. Codice meccanografico (specifica a quale sede/plesso si riferisce; se esistono codici diversi, elencali separatamente)
-3. Via e numero civico
-4. Numero di telefono
-5. Email ordinaria e PEC se pubblica e reperibile
-6. Sito web ufficiale come link Markdown cliccabile, che si possa aprire con un clic
-7. Fonti consultate, con link Markdown cliccabili
-
-Non inventare né dedurre codici, numeri di telefono, indirizzi email o siti. Per ogni campo non trovato scrivi "Non trovato in una fonte affidabile". Se trovi più scuole compatibili, mostra le alternative e spiega come distinguerle, senza scegliere arbitrariamente. Distingui chiaramente i dati confermati da quelli non verificati. Non restituire soltanto link a ricerche Google: cerca pagine specifiche e link diretti alle fonti.
-"""
-                try:
-                    with st.spinner("AVS sta cercando nelle fonti pubbliche..."):
+            try:
+                with st.spinner("🔎 Cerco negli archivi scolastici 2026/2027..."):
+                    archivi, numero_csv_repo = carica_archivi_scuole(csv_caricati)
+                    risultati_locali = cerca_scuole_nei_csv(
+                        archivi, nome_scuola_ricerca, regione_scuola_ricerca
+                    )
+                if risultati_locali:
+                    st.success(f"Trovate {len(risultati_locali)} corrispondenze negli archivi scolastici, senza consumare richieste Gemini.")
+                    mostra_schede_scuole(risultati_locali)
+                    if any(not (r["telefono"] and r["email"] and r["sito"]) for r in risultati_locali):
                         query_web = f'"{nome_scuola_ricerca}" {regione_scuola_ricerca} scuola codice meccanografico telefono email sito ufficiale'
-                        risultati_web = cerca_web_pubblica(query_web)
-                        if not risultati_web:
-                            st.warning("Il motore di ricerca non ha restituito risultati leggibili. Puoi aprire la ricerca direttamente qui sotto.")
-                            st.markdown(f"[Apri la ricerca sul web](https://www.google.com/search?q={quote_plus(query_web)})")
-                            st.stop()
-                        fonti_web = "\n".join(
-                            f"- Titolo: {r['titolo']}\n  URL: {r['url']}\n  Estratto: {r['estratto']}"
-                            for r in risultati_web
-                        )
-                        prompt_completo = prompt_scuola + "\n\nRISULTATI WEB REPERITI ORA (usa questi dati e link; non inventare ciò che manca):\n" + fonti_web
-                        client = get_gemini_client(api_key)
-                        risposta_scuola = genera_con_attesa(
-                            client, modello=MODEL_NAME, contenuti=prompt_completo,
-                            configurazione=types.GenerateContentConfig(
-                                system_instruction=(
-                                    "Sei AVS, assistente per le segreterie scolastiche italiane. "
-                                    "Usa i risultati web forniti, privilegia fonti ufficiali e cita solo URL presenti nei risultati. "
-                                    "Gli estratti possono essere incompleti: non inventare codici, contatti o dati mancanti."
-                                ),
-                                temperature=0.1,
-                                max_output_tokens=1800,
-                            ),
-                        )
-                    testo_scuola = (risposta_scuola.text or "").strip()
-                    if testo_scuola:
-                        st.success("Ricerca completata. Verifica i dati sulle fonti prima di usarli in atti ufficiali.")
-                        st.markdown(testo_scuola, unsafe_allow_html=False)
+                        st.markdown("**Mancano alcuni contatti nei CSV?** Puoi cercarli sul web aprendo questa ricerca:")
+                        st.markdown(f"[🔗 Cerca contatti e sito ufficiale sul web](https://www.google.com/search?q={quote_plus(query_web)})")
+                        st.caption("I contatti non presenti nei CSV non vengono inventati; il collegamento apre una ricerca web manuale e non usa Gemini.")
+                else:
+                    if archivi:
+                        st.warning("Non ho trovato una corrispondenza sufficientemente affidabile nei CSV per questa denominazione e regione.")
                     else:
-                        st.warning("La ricerca non ha restituito una risposta testuale. Riprova con il nome completo della scuola.")
-                except Exception as exc:
-                    dettaglio = str(exc)
-                    if "QUOTA_GIORNALIERA" in dettaglio:
-                        st.warning("⏳ Limite temporaneo di Gemini raggiunto. " + dettaglio.replace("QUOTA_GIORNALIERA:", ""))
-                    elif "429" in dettaglio or "RESOURCE_EXHAUSTED" in dettaglio:
-                        st.warning("⏳ Troppe richieste in questo momento. Attendi un po' e riprova; non è necessario modificare i PDF.")
-                    else:
-                        st.error("Non è stato possibile completare la ricerca. Verifica la connessione e riprova.")
-                        st.caption(dettaglio[:500])
+                        st.info("Gli archivi CSV non sono disponibili. Puoi caricarli qui oppure continuare con la ricerca web.")
+                    query_web = f'"{nome_scuola_ricerca}" {regione_scuola_ricerca} scuola codice meccanografico telefono email sito ufficiale'
+                    st.markdown(f"[🔗 Cerca questa scuola sul web](https://www.google.com/search?q={quote_plus(query_web)})")
+                    # La ricerca nei CSV funziona senza Gemini. La ricerca web manuale è sempre disponibile anche in caso di quota esaurita.
+                    api_key = st.secrets.get("GEMINI_API_KEY")
+                    if api_key:
+                        try:
+                            with st.spinner("Provo anche a consultare i risultati web pubblici..."):
+                                risultati_web = cerca_web_pubblica(query_web)
+                            if risultati_web:
+                                prompt_scuola = f"""
+Sei un assistente per le segreterie scolastiche italiane. Usa esclusivamente i risultati web forniti qui sotto per preparare una scheda sulla scuola richiesta.
+Nome richiesto: {nome_scuola_ricerca}
+Regione: {regione_scuola_ricerca}
+Indica denominazione, codice meccanografico, indirizzo, telefono, email/PEC e sito ufficiale solo se supportati dai risultati. Non inventare dati; per i campi non trovati scrivi 'Non trovato nei risultati disponibili'. Seleziona i link delle fonti tra quelli forniti.
+RISULTATI WEB:
+""" + "\n".join(f"- {r['titolo']} | {r['url']} | {r['estratto']}" for r in risultati_web)
+                                client = get_gemini_client(api_key)
+                                risposta_scuola = genera_con_attesa(
+                                    client, modello=MODEL_NAME, contenuti=prompt_scuola,
+                                    configurazione=types.GenerateContentConfig(temperature=0.1, max_output_tokens=1400),
+                                )
+                                testo_scuola = (risposta_scuola.text or "").strip()
+                                if testo_scuola:
+                                    st.markdown("#### Risultati web aggiuntivi")
+                                    st.markdown(testo_scuola, unsafe_allow_html=False)
+                                else:
+                                    st.caption("La ricerca automatica non ha restituito testo; usa il collegamento web qui sopra.")
+                            else:
+                                st.caption("Il motore web non ha restituito risultati leggibili. Il collegamento sopra consente di proseguire manualmente.")
+                        except Exception as exc:
+                            dettaglio = str(exc)
+                            if "QUOTA_GIORNALIERA" in dettaglio:
+                                st.warning("⏳ Limite temporaneo Gemini: " + dettaglio.replace("QUOTA_GIORNALIERA:", ""))
+                            elif "429" in dettaglio or "RESOURCE_EXHAUSTED" in dettaglio:
+                                st.warning("⏳ Quota o limite temporaneo Gemini raggiunto. La ricerca nei CSV resta disponibile e il collegamento web sopra funziona indipendentemente da Gemini.")
+                            else:
+                                st.caption(f"Ricerca automatica aggiuntiva non riuscita ({dettaglio[:250]}). Puoi usare il collegamento web sopra.")
+            except Exception as exc:
+                st.error(f"Errore durante la lettura degli archivi scolastici: {str(exc)[:300]}")
 
     st.info(
         "Nota: il codice meccanografico può cambiare tra istituto principale e plessi. "
